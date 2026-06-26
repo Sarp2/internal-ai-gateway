@@ -45,6 +45,9 @@ If any check fails, fix it or explain the failure clearly.
 ## Summary
 - ...
 
+## Changes
+- ...
+
 ## Tests
 - `pnpm lint`
 - `pnpm check`

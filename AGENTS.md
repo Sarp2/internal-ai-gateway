@@ -47,6 +47,9 @@ If a check cannot be run, say why.
 ## Summary
 - ...
 
+## Changes
+- ...
+
 ## Tests
 - `pnpm lint`
 - `pnpm check`
