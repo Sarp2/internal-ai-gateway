@@ -42,7 +42,7 @@ If any check fails, fix it or explain the failure clearly.
 - Use this PR description structure:
 
 ```markdown
-## What's changed
+## Summary
 - ...
 
 ## Tests

@@ -44,7 +44,7 @@ If a check cannot be run, say why.
 - Use this PR description structure:
 
 ```markdown
-## What's changed
+## Summary
 - ...
 
 ## Tests
