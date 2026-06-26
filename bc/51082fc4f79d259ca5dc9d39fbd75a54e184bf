@@ -1,0 +1,93 @@
+infra/tsconfig.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,8
+  s_c26b496cd2589a::t_915808a2708401 2-7
+CLAUDE.md
+  s_c26b496cd2589a::t_7f70be05ab5192 1-2,5-8,10-37,39-41
+  s_c26b496cd2589a::t_50f7178f82b2ca 3-4,9,38
+README.md
+  s_c26b496cd2589a::t_99fb433cb6e4dc 2-27
+functions/admin/tsconfig.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,8
+  s_c26b496cd2589a::t_915808a2708401 2-7
+functions/proxy/tsconfig.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,8
+  s_c26b496cd2589a::t_915808a2708401 2-7
+AGENTS.md
+  s_c26b496cd2589a::t_7f70be05ab5192 1-2,5-8,10-14,16-39,41-43
+  s_c26b496cd2589a::t_50f7178f82b2ca 3-4,9,15,40
+functions/admin/index.ts
+  s_c26b496cd2589a::t_05afeba860727b 1
+functions/proxy/index.ts
+  s_c26b496cd2589a::t_05afeba860727b 1
+infra/lib/.gitkeep
+  s_c26b496cd2589a::t_2f027bd147b045 1
+functions/proxy/package.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,15
+  s_c26b496cd2589a::t_915808a2708401 2-14
+shared/utils/.gitkeep
+  s_c26b496cd2589a::t_2f027bd147b045 1
+infra/lib/index.ts
+  s_c26b496cd2589a::t_05afeba860727b 1
+shared/db/.gitkeep
+  s_c26b496cd2589a::t_2f027bd147b045 1
+tsconfig.base.json
+  s_c26b496cd2589a::t_915808a2708401 2-16
+  s_c26b496cd2589a::t_2f027bd147b045 1,17
+shared/package.json
+  s_c26b496cd2589a::t_915808a2708401 2-16
+  s_c26b496cd2589a::t_2f027bd147b045 1,17
+shared/index.ts
+  s_c26b496cd2589a::t_05afeba860727b 1
+infra/package.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,12
+  s_c26b496cd2589a::t_915808a2708401 2-11
+package.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,22
+  s_c26b496cd2589a::t_f4068f9447bd70 8,11
+  s_c26b496cd2589a::t_915808a2708401 2-7,9-10,13-19,21
+  s_c26b496cd2589a::t_608cfc7f050829 12
+  s_c26b496cd2589a::t_41d86c4fe532fa 20
+functions/engineer/tsconfig.json
+  s_c26b496cd2589a::t_915808a2708401 2-7
+  s_c26b496cd2589a::t_2f027bd147b045 1,8
+functions/engineer/package.json
+  s_c26b496cd2589a::t_2f027bd147b045 1,15
+  s_c26b496cd2589a::t_915808a2708401 2-14
+functions/admin/package.json
+  s_c26b496cd2589a::t_915808a2708401 2-14
+  s_c26b496cd2589a::t_2f027bd147b045 1,15
+shared/types/.gitkeep
+  s_c26b496cd2589a::t_2f027bd147b045 1
+.github/workflows/ci.yml
+  s_c26b496cd2589a::t_f4068f9447bd70 1-42
+.gitignore
+  s_c26b496cd2589a::t_05afeba860727b 1-5
+functions/engineer/index.ts
+  s_c26b496cd2589a::t_05afeba860727b 1
+pnpm-workspace.yaml
+  s_c26b496cd2589a::t_2f027bd147b045 1-4
+biome.json
+  s_c26b496cd2589a::t_4610b7b0d66e81 10
+  s_c26b496cd2589a::t_6a1c28530df100 1-9,11-37
+shared/tsconfig.json
+  s_c26b496cd2589a::t_915808a2708401 2-7
+  s_c26b496cd2589a::t_2f027bd147b045 1,8
+pnpm-lock.yaml
+  s_c26b496cd2589a::t_86afbd83c1ac4a 1-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "bc51082fc4f79d259ca5dc9d39fbd75a54e184bf",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
