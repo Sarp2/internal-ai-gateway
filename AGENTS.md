@@ -41,6 +41,17 @@ If a check cannot be run, say why.
 - Keep PR descriptions short and consistent.
 - Describe the meaningful changes and verification commands.
 - Do not use a different PR format unless Sarp asks for it.
+- Use this PR description structure:
+
+```markdown
+## Summary
+- ...
+
+## Verification
+- `pnpm lint`
+- `pnpm check`
+- `pnpm test`
+```
 
 ## Communication
 
