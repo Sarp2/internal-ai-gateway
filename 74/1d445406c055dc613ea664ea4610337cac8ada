@@ -1,0 +1,23 @@
+tsconfig.base.json
+  s_c26b496cd2589a::t_8d10204220dae2 5
+package.json
+  s_c26b496cd2589a::t_99f8cb640824c4 20
+pnpm-lock.yaml
+  s_c26b496cd2589a::t_e716d115ad3092 14-16,118-120,126-128,166-169,171-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "741d445406c055dc613ea664ea4610337cac8ada",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
