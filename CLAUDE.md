@@ -42,10 +42,10 @@ If any check fails, fix it or explain the failure clearly.
 - Use this PR description structure:
 
 ```markdown
-## Summary
+## What's changed
 - ...
 
-## Verification
+## Tests
 - `pnpm lint`
 - `pnpm check`
 - `pnpm test`

@@ -44,10 +44,10 @@ If a check cannot be run, say why.
 - Use this PR description structure:
 
 ```markdown
-## Summary
+## What's changed
 - ...
 
-## Verification
+## Tests
 - `pnpm lint`
 - `pnpm check`
 - `pnpm test`
