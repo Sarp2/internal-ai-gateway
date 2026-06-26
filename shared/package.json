@@ -1,0 +1,17 @@
+{
+	"name": "@internal-ai-gateway/shared",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./types/*": "./types/*.ts",
+		"./utils/*": "./utils/*.ts",
+		"./db/*": "./db/*.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.3"
+	}
+}
