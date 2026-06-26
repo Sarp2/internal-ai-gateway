@@ -1,0 +1,21 @@
+AGENTS.md
+  s_c26b496cd2589a::t_08669a802d4313 50-52
+CLAUDE.md
+  s_c26b496cd2589a::t_08669a802d4313 48-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a6834ffcf7007069c85909b05e0a39d7b537626d",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
