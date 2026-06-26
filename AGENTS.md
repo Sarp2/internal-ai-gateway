@@ -34,6 +34,14 @@ Before saying a task is done, run the relevant checks:
 
 If a check cannot be run, say why.
 
+## Pull Requests
+
+- Use conventional commit style for PR titles, for example `chore: scaffold backend workspace`.
+- Keep PR titles under 80 characters.
+- Keep PR descriptions short and consistent.
+- Describe the meaningful changes and verification commands.
+- Do not use a different PR format unless Sarp asks for it.
+
 ## Communication
 
 - Keep explanations short and concrete.
