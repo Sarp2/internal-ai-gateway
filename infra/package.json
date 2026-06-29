@@ -4,9 +4,17 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"cdk": "cdk",
+		"diff": "cdk diff",
+		"synth": "cdk synth",
+		"typecheck": "tsc"
 	},
 	"devDependencies": {
+		"aws-cdk": "^2.1128.1",
 		"typescript": "^5.9.3"
+	},
+	"dependencies": {
+		"aws-cdk-lib": "^2.260.0",
+		"constructs": "^10.6.0"
 	}
 }

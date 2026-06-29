@@ -25,3 +25,9 @@ Run tests:
 ```bash
 pnpm test
 ```
+
+Synthesize the CDK app:
+
+```bash
+pnpm synth
+```
