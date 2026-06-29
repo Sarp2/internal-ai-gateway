@@ -1,0 +1,27 @@
+infra/bin/app.ts
+  s_c26b496cd2589a::t_f3330f1e4dba5b 4-5,10-11
+infra/lib/secrets-stack.ts
+  s_c26b496cd2589a::t_f3330f1e4dba5b 1-23
+infra/lib/secrets-stack.test.ts
+  s_c26b496cd2589a::t_f3330f1e4dba5b 1-42
+infra/lib/s3-stack.test.ts
+  s_c26b496cd2589a::t_f3330f1e4dba5b 1-66
+infra/lib/s3-stack.ts
+  s_c26b496cd2589a::t_f3330f1e4dba5b 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "c580224f5a539ee30cb243b32ee78fcc16e9d52b",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
