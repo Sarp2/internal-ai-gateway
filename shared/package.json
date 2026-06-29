@@ -10,7 +10,7 @@
 		"./db/*": "./db/*.ts"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.3"
