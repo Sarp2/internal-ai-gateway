@@ -1,0 +1,23 @@
+infra/bin/app.ts
+  s_c26b496cd2589a::t_53821f87649ce5 5,13
+infra/lib/network-stack.ts
+  s_c26b496cd2589a::t_53821f87649ce5 1-30
+infra/lib/network-stack.test.ts
+  s_c26b496cd2589a::t_53821f87649ce5 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "4dd9941bb71123b2a83f8b6a5e530ae0cd62870f",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
