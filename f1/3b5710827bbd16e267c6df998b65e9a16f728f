@@ -1,0 +1,30 @@
+functions/engineer/usage.ts
+  s_c26b496cd2589a::t_d402b397a16036 1-9
+package.json
+  s_c26b496cd2589a::t_d402b397a16036 23
+infra/lib/lambda-stack.ts
+  s_c26b496cd2589a::t_d402b397a16036 1-27,30-63
+  s_c26b496cd2589a::t_92b8504e9e0e00 28-29
+infra/bin/app.ts
+  s_c26b496cd2589a::t_d402b397a16036 4,11
+infra/lib/lambda-stack.test.ts
+  s_c26b496cd2589a::t_d402b397a16036 1-41
+pnpm-lock.yaml
+  s_c26b496cd2589a::t_d818f75c391b19 17-19,144-299,330-334,386-463,479-507
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "f13b5710827bbd16e267c6df998b65e9a16f728f",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
