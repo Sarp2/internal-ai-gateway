@@ -3,11 +3,14 @@ import { fileURLToPath } from 'node:url';
 import type { StackProps } from 'aws-cdk-lib';
 import { Stack } from 'aws-cdk-lib';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
+import { SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
 import {
 	Cluster,
 	ContainerImage,
 	ContainerInsights,
+	FargateService,
 	FargateTaskDefinition,
+	type ICluster,
 	LogDrivers,
 } from 'aws-cdk-lib/aws-ecs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -16,6 +19,9 @@ import type { Construct } from 'constructs';
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = join(currentDirectory, '..', '..');
 const proxyContainerPort = 8080;
+const proxyDesiredTaskCount = 2;
+const proxyMaxTaskCount = 10;
+const proxyScaleTargetPercent = 60;
 
 type EcsStackProps = StackProps & {
 	vpc: Vpc;
@@ -23,6 +29,8 @@ type EcsStackProps = StackProps & {
 
 export class EcsStack extends Stack {
 	public readonly cluster: Cluster;
+	public readonly proxyService: FargateService;
+	public readonly proxyServiceSecurityGroup: SecurityGroup;
 	public readonly proxyTaskDefinition: FargateTaskDefinition;
 	public readonly proxyLogGroup: LogGroup;
 
@@ -69,6 +77,43 @@ export class EcsStack extends Stack {
 					containerPort: proxyContainerPort,
 				},
 			],
+		});
+
+		this.proxyServiceSecurityGroup = new SecurityGroup(this, 'ProxyServiceSecurityGroup', {
+			vpc: props.vpc as IVpc,
+			description: 'Controls network access for proxy ECS tasks.',
+			allowAllOutbound: true,
+		});
+
+		this.proxyService = new FargateService(this, 'ProxyService', {
+			cluster: this.cluster as ICluster,
+			taskDefinition: this.proxyTaskDefinition,
+			serviceName: 'internal-ai-gateway-proxy',
+			desiredCount: proxyDesiredTaskCount,
+			assignPublicIp: false,
+			vpcSubnets: {
+				subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+			},
+			securityGroups: [this.proxyServiceSecurityGroup],
+			minHealthyPercent: 100,
+			maxHealthyPercent: 200,
+			circuitBreaker: {
+				rollback: true,
+			},
+			enableECSManagedTags: true,
+		});
+
+		const proxyScaling = this.proxyService.autoScaleTaskCount({
+			minCapacity: proxyDesiredTaskCount,
+			maxCapacity: proxyMaxTaskCount,
+		});
+
+		proxyScaling.scaleOnCpuUtilization('ProxyCpuScaling', {
+			targetUtilizationPercent: proxyScaleTargetPercent,
+		});
+
+		proxyScaling.scaleOnMemoryUtilization('ProxyMemoryScaling', {
+			targetUtilizationPercent: proxyScaleTargetPercent,
 		});
 	}
 }
