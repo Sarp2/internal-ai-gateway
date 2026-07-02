@@ -2,6 +2,7 @@ cdk.out/
 dist/
 infra/cdk.out/
 node_modules/
+target/
 *.log
 .git/
 .DS_Store
