@@ -7,7 +7,15 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["*.json", "*.jsonc", "*.ts", "infra/**", "functions/**", "shared/**"]
+		"includes": [
+			"*.json",
+			"*.jsonc",
+			"*.ts",
+			"infra/**",
+			"functions/**",
+			"services/**",
+			"shared/**"
+		]
 	},
 	"formatter": {
 		"enabled": true,

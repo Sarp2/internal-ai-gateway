@@ -11,7 +11,7 @@
 		"format:check": "biome format .",
 		"lint": "biome check .",
 		"synth": "pnpm --filter @internal-ai-gateway/infra synth",
-		"test": "node --test",
+		"test": "find functions infra services shared -path '*/cdk.out/*' -prune -o -name '*.test.ts' -print | xargs node --test",
 		"typecheck": "pnpm -r typecheck"
 	},
 	"engines": {

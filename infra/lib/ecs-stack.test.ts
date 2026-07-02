@@ -34,6 +34,55 @@ test('enables enhanced container insights for observability', () => {
 	});
 });
 
+test('defines a Fargate task definition for the proxy container', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+		Family: 'internal-ai-gateway-proxy',
+		Cpu: '512',
+		Memory: '1024',
+		NetworkMode: 'awsvpc',
+		RequiresCompatibilities: ['FARGATE'],
+	});
+});
+
+test('defines the proxy container port and runtime environment', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+		ContainerDefinitions: [
+			{
+				Name: 'proxy',
+				Essential: true,
+				Environment: [
+					{
+						Name: 'NODE_ENV',
+						Value: 'production',
+					},
+					{
+						Name: 'PORT',
+						Value: '8080',
+					},
+				],
+				PortMappings: [
+					{
+						ContainerPort: 8080,
+					},
+				],
+			},
+		],
+	});
+});
+
+test('defines CloudWatch logs for the proxy container', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::Logs::LogGroup', {
+		LogGroupName: '/internal-ai-gateway/proxy',
+		RetentionInDays: 30,
+	});
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
