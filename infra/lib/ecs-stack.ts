@@ -1,9 +1,8 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { StackProps } from 'aws-cdk-lib';
-import { Stack } from 'aws-cdk-lib';
+import { Duration, Stack, type StackProps } from 'aws-cdk-lib';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
-import { SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { Peer, Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
 import {
 	Cluster,
 	ContainerImage,
@@ -13,6 +12,11 @@ import {
 	type ICluster,
 	LogDrivers,
 } from 'aws-cdk-lib/aws-ecs';
+import {
+	ApplicationLoadBalancer,
+	ApplicationProtocol,
+	type ApplicationTargetGroup,
+} from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import type { Construct } from 'constructs';
 
@@ -29,6 +33,9 @@ type EcsStackProps = StackProps & {
 
 export class EcsStack extends Stack {
 	public readonly cluster: Cluster;
+	public readonly proxyLoadBalancer: ApplicationLoadBalancer;
+	public readonly proxyLoadBalancerSecurityGroup: SecurityGroup;
+	public readonly proxyTargetGroup: ApplicationTargetGroup;
 	public readonly proxyService: FargateService;
 	public readonly proxyServiceSecurityGroup: SecurityGroup;
 	public readonly proxyTaskDefinition: FargateTaskDefinition;
@@ -65,8 +72,8 @@ export class EcsStack extends Stack {
 			}),
 			essential: true,
 			environment: {
-				NODE_ENV: 'production',
 				PORT: String(proxyContainerPort),
+				RUST_LOG: 'info',
 			},
 			logging: LogDrivers.awsLogs({
 				logGroup: this.proxyLogGroup,
@@ -101,6 +108,62 @@ export class EcsStack extends Stack {
 				rollback: true,
 			},
 			enableECSManagedTags: true,
+		});
+
+		this.proxyLoadBalancerSecurityGroup = new SecurityGroup(
+			this,
+			'ProxyLoadBalancerSecurityGroup',
+			{
+				vpc: props.vpc as IVpc,
+				description: 'Allows public HTTP traffic to reach the proxy load balancer.',
+				allowAllOutbound: true,
+			},
+		);
+
+		this.proxyLoadBalancerSecurityGroup.addIngressRule(
+			Peer.anyIpv4(),
+			Port.tcp(80),
+			'Allow public HTTP traffic.',
+		);
+
+		this.proxyServiceSecurityGroup.addIngressRule(
+			this.proxyLoadBalancerSecurityGroup,
+			Port.tcp(proxyContainerPort),
+			'Allow proxy traffic from the load balancer.',
+		);
+
+		this.proxyLoadBalancer = new ApplicationLoadBalancer(this, 'ProxyLoadBalancer', {
+			vpc: props.vpc as IVpc,
+			internetFacing: true,
+			securityGroup: this.proxyLoadBalancerSecurityGroup,
+			vpcSubnets: {
+				subnetType: SubnetType.PUBLIC,
+			},
+		});
+
+		const proxyListener = this.proxyLoadBalancer.addListener('ProxyHttpListener', {
+			port: 80,
+			protocol: ApplicationProtocol.HTTP,
+			open: false,
+		});
+
+		this.proxyTargetGroup = proxyListener.addTargets('ProxyTargets', {
+			port: proxyContainerPort,
+			protocol: ApplicationProtocol.HTTP,
+			targets: [
+				this.proxyService.loadBalancerTarget({
+					containerName: 'proxy',
+					containerPort: proxyContainerPort,
+				}),
+			],
+			healthCheck: {
+				path: '/health',
+				healthyHttpCodes: '200',
+				interval: Duration.seconds(30),
+				timeout: Duration.seconds(5),
+				healthyThresholdCount: 2,
+				unhealthyThresholdCount: 3,
+			},
 		});
 
 		const proxyScaling = this.proxyService.autoScaleTaskCount({

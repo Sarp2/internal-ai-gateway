@@ -56,12 +56,12 @@ test('defines the proxy container port and runtime environment', () => {
 				Essential: true,
 				Environment: [
 					{
-						Name: 'NODE_ENV',
-						Value: 'production',
-					},
-					{
 						Name: 'PORT',
 						Value: '8080',
+					},
+					{
+						Name: 'RUST_LOG',
+						Value: 'info',
 					},
 				],
 				PortMappings: [
@@ -103,6 +103,75 @@ test('defines a private Fargate service for proxy tasks', () => {
 				AssignPublicIp: 'DISABLED',
 			},
 		},
+	});
+});
+
+test('defines a public application load balancer for proxy traffic', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+		Scheme: 'internet-facing',
+		Type: 'application',
+	});
+});
+
+test('defines an HTTP listener for the proxy load balancer', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+		Port: 80,
+		Protocol: 'HTTP',
+	});
+});
+
+test('routes load balancer traffic to the proxy container port', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+		Port: 8080,
+		Protocol: 'HTTP',
+		TargetType: 'ip',
+	});
+});
+
+test('defines the proxy target group health check', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+		HealthCheckPath: '/health',
+		HealthCheckIntervalSeconds: 30,
+		HealthCheckTimeoutSeconds: 5,
+		HealthyThresholdCount: 2,
+		UnhealthyThresholdCount: 3,
+		Matcher: {
+			HttpCode: '200',
+		},
+	});
+});
+
+test('allows public HTTP traffic into the load balancer', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+		GroupDescription: 'Allows public HTTP traffic to reach the proxy load balancer.',
+		SecurityGroupIngress: [
+			{
+				CidrIp: '0.0.0.0/0',
+				FromPort: 80,
+				IpProtocol: 'tcp',
+				ToPort: 80,
+			},
+		],
+	});
+});
+
+test('allows load balancer traffic into proxy tasks', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+		FromPort: 8080,
+		IpProtocol: 'tcp',
+		ToPort: 8080,
 	});
 });
 
