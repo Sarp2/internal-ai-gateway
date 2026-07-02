@@ -1,0 +1,44 @@
+package.json
+  s_c26b496cd2589a::t_a1ad68643860cc 14
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_bd8cbd98a3cfd9 1-2,6-13,16-19,26-27,40-54,57-72
+  s_c26b496cd2589a::t_b37fc9d8207d01 55
+  s_c26b496cd2589a::t_a1ad68643860cc 56
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_bd8cbd98a3cfd9 37-85
+services/proxy/package.json
+  s_c26b496cd2589a::t_a1ad68643860cc 1-15
+services/proxy/server.test.ts
+  s_c26b496cd2589a::t_a1ad68643860cc 1-47
+biome.json
+  s_c26b496cd2589a::t_04ef6247055ce4 10-18
+.dockerignore
+  s_c26b496cd2589a::t_bd8cbd98a3cfd9 1-2,4-7
+  s_c26b496cd2589a::t_2cbedc4ee22022 3
+services/proxy/tsconfig.json
+  s_c26b496cd2589a::t_a1ad68643860cc 1-8
+pnpm-workspace.yaml
+  s_c26b496cd2589a::t_a1ad68643860cc 4
+services/proxy/server.ts
+  s_c26b496cd2589a::t_a1ad68643860cc 1-29
+services/proxy/Dockerfile
+  s_c26b496cd2589a::t_a1ad68643860cc 1-26
+pnpm-lock.yaml
+  s_c26b496cd2589a::t_e9a23f4f03f88c 70-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "57b08af33ee9cd02b168a9cd4db2856b8cd33a92",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
