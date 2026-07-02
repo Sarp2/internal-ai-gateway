@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { App } from 'aws-cdk-lib';
 import { DynamoDbStack } from '../lib/dynamodb-stack.ts';
+import { EcsStack } from '../lib/ecs-stack.ts';
 import { LambdaStack } from '../lib/lambda-stack.ts';
 import { NetworkStack } from '../lib/network-stack.ts';
 import { S3Stack } from '../lib/s3-stack.ts';
@@ -10,6 +11,9 @@ const app = new App();
 
 new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack');
 new LambdaStack(app, 'InternalAiGatewayLambdaStack');
-new NetworkStack(app, 'InternalAiGatewayNetworkStack');
+const networkStack = new NetworkStack(app, 'InternalAiGatewayNetworkStack');
+new EcsStack(app, 'InternalAiGatewayEcsStack', {
+	vpc: networkStack.vpc,
+});
 new S3Stack(app, 'InternalAiGatewayS3Stack');
 new SecretsStack(app, 'InternalAiGatewaySecretsStack');
