@@ -1,0 +1,39 @@
+biome.json
+  s_c26b496cd2589a::t_b67a28d95c8e39 16
+services/proxy/Cargo.toml
+  s_c26b496cd2589a::t_28068b94c52dd9 1-10,12-14
+  s_c26b496cd2589a::t_948cd07a68b92c 11
+.gitignore
+  s_c26b496cd2589a::t_b67a28d95c8e39 4
+.dockerignore
+  s_c26b496cd2589a::t_28068b94c52dd9 5
+package.json
+  s_c26b496cd2589a::t_28068b94c52dd9 8,12,14
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_857204e5f74c29 19,21-26,28,30-32,34,38-40,44,48-51,55-56,61-85,90-137
+  s_c26b496cd2589a::t_28068b94c52dd9 1-18,20,27,29,33,35-37,41-43,45-47,52-54,58-60,86-89,138
+  s_c26b496cd2589a::t_948cd07a68b92c 57
+services/proxy/Dockerfile
+  s_c26b496cd2589a::t_28068b94c52dd9 1,5,7-8,10-12,19
+  s_c26b496cd2589a::t_37c13a2ca0b2e1 15,23
+.github/workflows/ci.yml
+  s_c26b496cd2589a::t_28068b94c52dd9 33-36
+services/proxy/Cargo.lock
+  s_c26b496cd2589a::t_156b3fdf26cff8 1-643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5e6073cc1905a25518d2e3d02ca44392874a255d",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
