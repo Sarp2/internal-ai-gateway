@@ -1,26 +1,23 @@
-FROM node:24-alpine AS build
+FROM rust:1-alpine AS build
 
 WORKDIR /app
 
-COPY . .
+RUN apk add --no-cache musl-dev
 
-RUN corepack enable && pnpm install --frozen-lockfile
-RUN pnpm exec esbuild services/proxy/server.ts \
-	--bundle \
-	--platform=node \
-	--format=esm \
-	--target=node24 \
-	--outfile=/app/dist/server.mjs
+COPY services/proxy/Cargo.toml services/proxy/Cargo.lock ./services/proxy/
+COPY services/proxy/src ./services/proxy/src
 
-FROM node:24-alpine
+RUN cargo build --manifest-path services/proxy/Cargo.toml --release
 
-ENV NODE_ENV=production
+FROM alpine:3.22
+
 ENV PORT=8080
+ENV RUST_LOG=info
 
 WORKDIR /app
 
-COPY --from=build /app/dist/server.mjs ./server.mjs
+COPY --from=build /app/target/release/proxy-service ./proxy-service
 
 EXPOSE 8080
 
-CMD ["node", "server.mjs"]
+CMD ["./proxy-service"]

@@ -30,6 +30,10 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
       - run: pnpm install --frozen-lockfile
 
       - name: Lint & format

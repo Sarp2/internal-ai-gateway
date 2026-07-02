@@ -13,7 +13,7 @@
 			"*.ts",
 			"infra/**",
 			"functions/**",
-			"services/**",
+			"services/**/Cargo.toml",
 			"shared/**"
 		]
 	},
