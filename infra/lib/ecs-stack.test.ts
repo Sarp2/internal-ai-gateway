@@ -83,6 +83,64 @@ test('defines CloudWatch logs for the proxy container', () => {
 	});
 });
 
+test('defines a private Fargate service for proxy tasks', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ECS::Service', {
+		ServiceName: 'internal-ai-gateway-proxy',
+		DesiredCount: 2,
+		EnableECSManagedTags: true,
+		DeploymentConfiguration: {
+			DeploymentCircuitBreaker: {
+				Enable: true,
+				Rollback: true,
+			},
+			MaximumPercent: 200,
+			MinimumHealthyPercent: 100,
+		},
+		NetworkConfiguration: {
+			AwsvpcConfiguration: {
+				AssignPublicIp: 'DISABLED',
+			},
+		},
+	});
+});
+
+test('defines autoscaling limits for proxy tasks', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+		MaxCapacity: 10,
+		MinCapacity: 2,
+		ScalableDimension: 'ecs:service:DesiredCount',
+		ServiceNamespace: 'ecs',
+	});
+});
+
+test('defines CPU and memory target tracking scaling policies', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+		PolicyType: 'TargetTrackingScaling',
+		TargetTrackingScalingPolicyConfiguration: {
+			PredefinedMetricSpecification: {
+				PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+			},
+			TargetValue: 60,
+		},
+	});
+
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+		PolicyType: 'TargetTrackingScaling',
+		TargetTrackingScalingPolicyConfiguration: {
+			PredefinedMetricSpecification: {
+				PredefinedMetricType: 'ECSServiceAverageMemoryUtilization',
+			},
+			TargetValue: 60,
+		},
+	});
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
