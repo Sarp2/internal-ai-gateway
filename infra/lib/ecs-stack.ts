@@ -87,10 +87,7 @@ export class EcsStack extends Stack {
 		this.proxyAccessLogBucket.addToResourcePolicy(
 			new PolicyStatement({
 				actions: ['s3:PutObject'],
-				principals: [
-					new ServicePrincipal('delivery.logs.amazonaws.com'),
-					new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com'),
-				],
+				principals: [new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
 				resources: [
 					this.proxyAccessLogBucket.arnForObjects(
 						`${proxyAccessLogPrefix}/AWSLogs/${this.account}/*`,
@@ -107,10 +104,7 @@ export class EcsStack extends Stack {
 		this.proxyAccessLogBucket.addToResourcePolicy(
 			new PolicyStatement({
 				actions: ['s3:GetBucketAcl'],
-				principals: [
-					new ServicePrincipal('delivery.logs.amazonaws.com'),
-					new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com'),
-				],
+				principals: [new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
 				resources: [this.proxyAccessLogBucket.bucketArn],
 			}),
 		);

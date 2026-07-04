@@ -127,13 +127,13 @@ test('allows load balancer log delivery to write access logs', () => {
 						},
 					},
 					Principal: {
-						Service: Match.arrayWith(['delivery.logs.amazonaws.com']),
+						Service: 'logdelivery.elasticloadbalancing.amazonaws.com',
 					},
 				}),
 				Match.objectLike({
 					Action: 's3:GetBucketAcl',
 					Principal: {
-						Service: Match.arrayWith(['delivery.logs.amazonaws.com']),
+						Service: 'logdelivery.elasticloadbalancing.amazonaws.com',
 					},
 				}),
 			]),
@@ -370,6 +370,15 @@ test('defines proxy CloudWatch alarms', () => {
 		TreatMissingData: 'notBreaching',
 	});
 	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy ECS service memory utilization is high.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 3,
+		MetricName: 'MemoryUtilization',
+		Namespace: 'AWS/ECS',
+		Threshold: 80,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
 		AlarmDescription: 'Proxy active streams per task are close to the hard limit.',
 		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
 		EvaluationPeriods: 2,
@@ -379,12 +388,30 @@ test('defines proxy CloudWatch alarms', () => {
 		TreatMissingData: 'notBreaching',
 	});
 	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy targets are returning elevated 5xx responses.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 2,
+		MetricName: 'HTTPCode_Target_5XX_Count',
+		Namespace: 'AWS/ApplicationELB',
+		Threshold: 10,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
 		AlarmDescription: 'At least one proxy ALB target is unhealthy.',
 		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
 		EvaluationPeriods: 2,
 		MetricName: 'UnHealthyHostCount',
 		Namespace: 'AWS/ApplicationELB',
 		Threshold: 1,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy target response time is elevated.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 3,
+		MetricName: 'TargetResponseTime',
+		Namespace: 'AWS/ApplicationELB',
+		Threshold: 5,
 		TreatMissingData: 'notBreaching',
 	});
 });
