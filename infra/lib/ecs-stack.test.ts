@@ -1,8 +1,14 @@
+import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
+
+type SynthesizedResource = {
+	Type?: string;
+	DependsOn?: string | string[];
+};
 
 test('defines an ECS cluster for proxy workloads', () => {
 	const template = synthesizeTemplate();
@@ -91,6 +97,73 @@ test('defines CloudWatch logs for the proxy container', () => {
 	});
 });
 
+test('defines an encrypted access log bucket for the proxy load balancer', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::S3::Bucket', {
+		BucketEncryption: {
+			ServerSideEncryptionConfiguration: [
+				{
+					ServerSideEncryptionByDefault: {
+						SSEAlgorithm: 'AES256',
+					},
+				},
+			],
+		},
+		PublicAccessBlockConfiguration: {
+			BlockPublicAcls: true,
+			BlockPublicPolicy: true,
+			IgnorePublicAcls: true,
+			RestrictPublicBuckets: true,
+		},
+	});
+});
+
+test('allows load balancer log delivery to write access logs', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::S3::BucketPolicy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: 's3:PutObject',
+					Condition: Match.absent(),
+					Principal: {
+						Service: 'logdelivery.elasticloadbalancing.amazonaws.com',
+					},
+				}),
+				Match.objectLike({
+					Action: 's3:GetBucketAcl',
+					Principal: {
+						Service: 'logdelivery.elasticloadbalancing.amazonaws.com',
+					},
+				}),
+			]),
+		},
+	});
+});
+
+test('creates the access log bucket policy before enabling load balancer logs', () => {
+	const template = synthesizeTemplate();
+	const templateJson = template.toJSON();
+	const resources = Object.values(templateJson.Resources) as SynthesizedResource[];
+	const loadBalancer = resources.find(
+		(resource) => resource.Type === 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+	);
+
+	assert.ok(loadBalancer);
+
+	const dependsOn = loadBalancer.DependsOn;
+	const dependencies = Array.isArray(dependsOn) ? dependsOn : [dependsOn];
+
+	assert.ok(
+		dependencies.some(
+			(dependency) =>
+				typeof dependency === 'string' && dependency.startsWith('ProxyAccessLogBucketPolicy'),
+		),
+	);
+});
+
 test('defines a private Fargate service for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -122,6 +195,14 @@ test('defines a public application load balancer for proxy traffic', () => {
 			{
 				Key: 'idle_timeout.timeout_seconds',
 				Value: '300',
+			},
+			{
+				Key: 'access_logs.s3.enabled',
+				Value: 'true',
+			},
+			{
+				Key: 'access_logs.s3.prefix',
+				Value: 'alb',
 			},
 		]),
 		Scheme: 'internet-facing',
@@ -295,6 +376,90 @@ test('defines active-stream target tracking for proxy tasks', () => {
 			ScaleOutCooldown: 30,
 			TargetValue: 150,
 		},
+	});
+});
+
+test('defines proxy CloudWatch alarms', () => {
+	const template = synthesizeTemplate();
+
+	template.resourceCountIs('AWS::CloudWatch::Alarm', 6);
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy ECS service CPU utilization is high.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 3,
+		MetricName: 'CPUUtilization',
+		Namespace: 'AWS/ECS',
+		Threshold: 80,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy ECS service memory utilization is high.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 3,
+		MetricName: 'MemoryUtilization',
+		Namespace: 'AWS/ECS',
+		Threshold: 80,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy active streams per task are close to the hard limit.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 2,
+		MetricName: 'ActiveStreams',
+		Namespace: 'InternalAiGateway/Proxy',
+		Statistic: 'Maximum',
+		Threshold: 180,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy targets are returning elevated 5xx responses.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 2,
+		MetricName: 'HTTPCode_Target_5XX_Count',
+		Namespace: 'AWS/ApplicationELB',
+		Threshold: 10,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'At least one proxy ALB target is unhealthy.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 2,
+		MetricName: 'UnHealthyHostCount',
+		Namespace: 'AWS/ApplicationELB',
+		Statistic: 'Maximum',
+		Threshold: 1,
+		TreatMissingData: 'notBreaching',
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+		AlarmDescription: 'Proxy target response time is elevated.',
+		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		EvaluationPeriods: 3,
+		MetricName: 'TargetResponseTime',
+		Namespace: 'AWS/ApplicationELB',
+		Threshold: 5,
+		TreatMissingData: 'notBreaching',
+	});
+});
+
+test('defines a proxy CloudWatch dashboard', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+		DashboardName: 'internal-ai-gateway-proxy',
+	});
+});
+
+test('defines deploy outputs for proxy endpoints and access logs', () => {
+	const template = synthesizeTemplate();
+
+	template.hasOutput('ProxyLoadBalancerDnsName', {
+		Description: 'Public DNS name for the proxy Application Load Balancer.',
+	});
+	template.hasOutput('ProxyHealthUrl', {
+		Description: 'Health check URL for the proxy service.',
+	});
+	template.hasOutput('ProxyAccessLogBucketName', {
+		Description: 'S3 bucket that stores proxy ALB access logs.',
 	});
 });
 

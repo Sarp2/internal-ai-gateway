@@ -1,7 +1,21 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Duration, Stack, type StackProps } from 'aws-cdk-lib';
-import { Metric, Unit } from 'aws-cdk-lib/aws-cloudwatch';
+import {
+	CfnOutput,
+	CfnResource,
+	Duration,
+	RemovalPolicy,
+	Stack,
+	type StackProps,
+} from 'aws-cdk-lib';
+import {
+	Alarm,
+	CfnDashboard,
+	ComparisonOperator,
+	Metric,
+	TreatMissingData,
+	Unit,
+} from 'aws-cdk-lib/aws-cloudwatch';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Peer, Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
 import {
@@ -17,9 +31,11 @@ import {
 	ApplicationLoadBalancer,
 	ApplicationProtocol,
 	type ApplicationTargetGroup,
+	HttpCodeTarget,
 } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +50,7 @@ const proxyMaxActiveStreams = 200;
 const activeStreamMetricNamespace = 'InternalAiGateway/Proxy';
 const activeStreamsMetricName = 'ActiveStreams';
 const proxyServiceName = 'internal-ai-gateway-proxy';
+const proxyAccessLogPrefix = 'alb';
 
 type EcsStackProps = StackProps & {
 	vpc: Vpc;
@@ -48,6 +65,7 @@ export class EcsStack extends Stack {
 	public readonly proxyServiceSecurityGroup: SecurityGroup;
 	public readonly proxyTaskDefinition: FargateTaskDefinition;
 	public readonly proxyLogGroup: LogGroup;
+	public readonly proxyAccessLogBucket: Bucket;
 
 	public constructor(scope: Construct, id: string, props: EcsStackProps) {
 		super(scope, id, props);
@@ -65,6 +83,33 @@ export class EcsStack extends Stack {
 			logGroupName: '/internal-ai-gateway/proxy',
 			retention: RetentionDays.ONE_MONTH,
 		});
+
+		this.proxyAccessLogBucket = new Bucket(this, 'ProxyAccessLogBucket', {
+			blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+			encryption: BucketEncryption.S3_MANAGED,
+			enforceSSL: true,
+			removalPolicy: RemovalPolicy.RETAIN,
+		});
+
+		this.proxyAccessLogBucket.addToResourcePolicy(
+			new PolicyStatement({
+				actions: ['s3:PutObject'],
+				principals: [new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
+				resources: [
+					this.proxyAccessLogBucket.arnForObjects(
+						`${proxyAccessLogPrefix}/AWSLogs/${this.account}/*`,
+					),
+				],
+			}),
+		);
+
+		this.proxyAccessLogBucket.addToResourcePolicy(
+			new PolicyStatement({
+				actions: ['s3:GetBucketAcl'],
+				principals: [new ServicePrincipal('logdelivery.elasticloadbalancing.amazonaws.com')],
+				resources: [this.proxyAccessLogBucket.bucketArn],
+			}),
+		);
 
 		this.proxyTaskDefinition = new FargateTaskDefinition(this, 'ProxyTaskDefinition', {
 			family: proxyServiceName,
@@ -172,6 +217,16 @@ export class EcsStack extends Stack {
 			},
 		});
 
+		this.proxyLoadBalancer.setAttribute('access_logs.s3.enabled', 'true');
+		this.proxyLoadBalancer.setAttribute(
+			'access_logs.s3.bucket',
+			this.proxyAccessLogBucket.bucketName,
+		);
+
+		this.proxyLoadBalancer.setAttribute('access_logs.s3.prefix', proxyAccessLogPrefix);
+		this.proxyLoadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
+		this.addAccessLogBucketPolicyDependency();
+
 		const proxyListener = this.proxyLoadBalancer.addListener('ProxyHttpListener', {
 			port: 80,
 			protocol: ApplicationProtocol.HTTP,
@@ -219,19 +274,245 @@ export class EcsStack extends Stack {
 		});
 
 		proxyScaling.scaleToTrackCustomMetric('ProxyActiveStreamScaling', {
-			metric: new Metric({
-				namespace: activeStreamMetricNamespace,
-				metricName: activeStreamsMetricName,
-				dimensionsMap: {
-					ServiceName: proxyServiceName,
-				},
-				statistic: 'Average',
-				period: Duration.seconds(60),
-				unit: Unit.COUNT,
-			}),
+			metric: this.activeStreamsMetric(),
 			targetValue: proxyActiveStreamsScaleTarget,
 			scaleInCooldown: Duration.seconds(180),
 			scaleOutCooldown: Duration.seconds(30),
 		});
+
+		this.addObservability();
+
+		new CfnOutput(this, 'ProxyLoadBalancerDnsName', {
+			description: 'Public DNS name for the proxy Application Load Balancer.',
+			value: this.proxyLoadBalancer.loadBalancerDnsName,
+		});
+
+		new CfnOutput(this, 'ProxyHealthUrl', {
+			description: 'Health check URL for the proxy service.',
+			value: `http://${this.proxyLoadBalancer.loadBalancerDnsName}/health`,
+		});
+
+		new CfnOutput(this, 'ProxyAccessLogBucketName', {
+			description: 'S3 bucket that stores proxy ALB access logs.',
+			value: this.proxyAccessLogBucket.bucketName,
+		});
+	}
+
+	private addObservability(): void {
+		const cpuMetric = this.proxyService.metricCpuUtilization({
+			period: Duration.minutes(1),
+		});
+
+		const memoryMetric = this.proxyService.metricMemoryUtilization({
+			period: Duration.minutes(1),
+		});
+
+		const activeStreamsMaximumMetric = this.activeStreamsMetric('Maximum');
+
+		const targetResponseTimeMetric = this.proxyTargetGroup.metrics.targetResponseTime({
+			period: Duration.minutes(1),
+		});
+
+		const target5xxMetric = this.proxyTargetGroup.metrics.httpCodeTarget(
+			HttpCodeTarget.TARGET_5XX_COUNT,
+			{
+				period: Duration.minutes(1),
+			},
+		);
+
+		const unhealthyHostMetric = this.proxyTargetGroup.metrics.unhealthyHostCount({
+			period: Duration.minutes(1),
+			statistic: 'Maximum',
+		});
+
+		new Alarm(this, 'ProxyHighCpuAlarm', {
+			alarmDescription: 'Proxy ECS service CPU utilization is high.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 3,
+			metric: cpuMetric,
+			threshold: 80,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new Alarm(this, 'ProxyHighMemoryAlarm', {
+			alarmDescription: 'Proxy ECS service memory utilization is high.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 3,
+			metric: memoryMetric,
+			threshold: 80,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new Alarm(this, 'ProxyHighActiveStreamsAlarm', {
+			alarmDescription: 'Proxy active streams per task are close to the hard limit.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 2,
+			metric: activeStreamsMaximumMetric,
+			threshold: 180,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new Alarm(this, 'ProxyTarget5xxAlarm', {
+			alarmDescription: 'Proxy targets are returning elevated 5xx responses.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 2,
+			metric: target5xxMetric,
+			threshold: 10,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new Alarm(this, 'ProxyUnhealthyTargetsAlarm', {
+			alarmDescription: 'At least one proxy ALB target is unhealthy.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 2,
+			metric: unhealthyHostMetric,
+			threshold: 1,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new Alarm(this, 'ProxyHighResponseTimeAlarm', {
+			alarmDescription: 'Proxy target response time is elevated.',
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			evaluationPeriods: 3,
+			metric: targetResponseTimeMetric,
+			threshold: 5,
+			treatMissingData: TreatMissingData.NOT_BREACHING,
+		});
+
+		new CfnDashboard(this, 'ProxyDashboard', {
+			dashboardName: 'internal-ai-gateway-proxy',
+			dashboardBody: Stack.of(this).toJsonString({
+				widgets: [
+					{
+						type: 'metric',
+						width: 12,
+						height: 6,
+						properties: {
+							title: 'Proxy Load',
+							region: Stack.of(this).region,
+							metrics: [
+								[
+									'AWS/ApplicationELB',
+									'RequestCount',
+									'TargetGroup',
+									this.proxyTargetGroup.targetGroupFullName,
+									'LoadBalancer',
+									this.proxyTargetGroup.firstLoadBalancerFullName,
+									{ stat: 'Sum' },
+								],
+								[
+									activeStreamMetricNamespace,
+									activeStreamsMetricName,
+									'ServiceName',
+									proxyServiceName,
+									{ stat: 'Average' },
+								],
+							],
+						},
+					},
+					{
+						type: 'metric',
+						width: 12,
+						height: 6,
+						properties: {
+							title: 'Proxy Resource Utilization',
+							region: Stack.of(this).region,
+							metrics: [
+								[
+									'AWS/ECS',
+									'CPUUtilization',
+									'ClusterName',
+									this.cluster.clusterName,
+									'ServiceName',
+									proxyServiceName,
+								],
+								[
+									'AWS/ECS',
+									'MemoryUtilization',
+									'ClusterName',
+									this.cluster.clusterName,
+									'ServiceName',
+									proxyServiceName,
+								],
+							],
+						},
+					},
+					{
+						type: 'metric',
+						width: 12,
+						height: 6,
+						properties: {
+							title: 'Proxy Errors And Health',
+							region: Stack.of(this).region,
+							metrics: [
+								[
+									'AWS/ApplicationELB',
+									HttpCodeTarget.TARGET_5XX_COUNT,
+									'TargetGroup',
+									this.proxyTargetGroup.targetGroupFullName,
+									'LoadBalancer',
+									this.proxyTargetGroup.firstLoadBalancerFullName,
+									{ stat: 'Sum' },
+								],
+								[
+									'AWS/ApplicationELB',
+									'UnHealthyHostCount',
+									'TargetGroup',
+									this.proxyTargetGroup.targetGroupFullName,
+									'LoadBalancer',
+									this.proxyTargetGroup.firstLoadBalancerFullName,
+									{ stat: 'Average' },
+								],
+							],
+						},
+					},
+					{
+						type: 'metric',
+						width: 12,
+						height: 6,
+						properties: {
+							title: 'Proxy Target Response Time',
+							region: Stack.of(this).region,
+							metrics: [
+								[
+									'AWS/ApplicationELB',
+									'TargetResponseTime',
+									'TargetGroup',
+									this.proxyTargetGroup.targetGroupFullName,
+									'LoadBalancer',
+									this.proxyTargetGroup.firstLoadBalancerFullName,
+									{ stat: 'Average' },
+								],
+							],
+						},
+					},
+				],
+			}),
+		});
+	}
+
+	private activeStreamsMetric(statistic: 'Average' | 'Maximum' = 'Average'): Metric {
+		return new Metric({
+			namespace: activeStreamMetricNamespace,
+			metricName: activeStreamsMetricName,
+			dimensionsMap: {
+				ServiceName: proxyServiceName,
+			},
+			statistic,
+			period: Duration.seconds(60),
+			unit: Unit.COUNT,
+		});
+	}
+
+	private addAccessLogBucketPolicyDependency(): void {
+		const loadBalancerResource = this.proxyLoadBalancer.node.defaultChild;
+		const bucketPolicyResource = this.proxyAccessLogBucket.policy?.node.defaultChild;
+
+		if (
+			CfnResource.isCfnResource(loadBalancerResource) &&
+			CfnResource.isCfnResource(bucketPolicyResource)
+		) {
+			loadBalancerResource.addDependency(bucketPolicyResource);
+		}
 	}
 }
