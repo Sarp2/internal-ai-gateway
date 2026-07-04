@@ -1,6 +1,13 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import {
+	CfnOutput,
+	CfnResource,
+	Duration,
+	RemovalPolicy,
+	Stack,
+	type StackProps,
+} from 'aws-cdk-lib';
 import {
 	Alarm,
 	CfnDashboard,
@@ -93,11 +100,6 @@ export class EcsStack extends Stack {
 						`${proxyAccessLogPrefix}/AWSLogs/${this.account}/*`,
 					),
 				],
-				conditions: {
-					StringEquals: {
-						's3:x-amz-acl': 'bucket-owner-full-control',
-					},
-				},
 			}),
 		);
 
@@ -223,6 +225,7 @@ export class EcsStack extends Stack {
 
 		this.proxyLoadBalancer.setAttribute('access_logs.s3.prefix', proxyAccessLogPrefix);
 		this.proxyLoadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
+		this.addAccessLogBucketPolicyDependency();
 
 		const proxyListener = this.proxyLoadBalancer.addListener('ProxyHttpListener', {
 			port: 80,
@@ -304,7 +307,7 @@ export class EcsStack extends Stack {
 			period: Duration.minutes(1),
 		});
 
-		const activeStreamsMetric = this.activeStreamsMetric();
+		const activeStreamsMaximumMetric = this.activeStreamsMetric('Maximum');
 
 		const targetResponseTimeMetric = this.proxyTargetGroup.metrics.targetResponseTime({
 			period: Duration.minutes(1),
@@ -319,6 +322,7 @@ export class EcsStack extends Stack {
 
 		const unhealthyHostMetric = this.proxyTargetGroup.metrics.unhealthyHostCount({
 			period: Duration.minutes(1),
+			statistic: 'Maximum',
 		});
 
 		new Alarm(this, 'ProxyHighCpuAlarm', {
@@ -343,7 +347,7 @@ export class EcsStack extends Stack {
 			alarmDescription: 'Proxy active streams per task are close to the hard limit.',
 			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
 			evaluationPeriods: 2,
-			metric: activeStreamsMetric,
+			metric: activeStreamsMaximumMetric,
 			threshold: 180,
 			treatMissingData: TreatMissingData.NOT_BREACHING,
 		});
@@ -487,16 +491,28 @@ export class EcsStack extends Stack {
 		});
 	}
 
-	private activeStreamsMetric(): Metric {
+	private activeStreamsMetric(statistic: 'Average' | 'Maximum' = 'Average'): Metric {
 		return new Metric({
 			namespace: activeStreamMetricNamespace,
 			metricName: activeStreamsMetricName,
 			dimensionsMap: {
 				ServiceName: proxyServiceName,
 			},
-			statistic: 'Average',
+			statistic,
 			period: Duration.seconds(60),
 			unit: Unit.COUNT,
 		});
+	}
+
+	private addAccessLogBucketPolicyDependency(): void {
+		const loadBalancerResource = this.proxyLoadBalancer.node.defaultChild;
+		const bucketPolicyResource = this.proxyAccessLogBucket.policy?.node.defaultChild;
+
+		if (
+			CfnResource.isCfnResource(loadBalancerResource) &&
+			CfnResource.isCfnResource(bucketPolicyResource)
+		) {
+			loadBalancerResource.addDependency(bucketPolicyResource);
+		}
 	}
 }

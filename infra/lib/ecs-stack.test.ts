@@ -1,8 +1,14 @@
+import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
+
+type SynthesizedResource = {
+	Type?: string;
+	DependsOn?: string | string[];
+};
 
 test('defines an ECS cluster for proxy workloads', () => {
 	const template = synthesizeTemplate();
@@ -121,11 +127,7 @@ test('allows load balancer log delivery to write access logs', () => {
 			Statement: Match.arrayWith([
 				Match.objectLike({
 					Action: 's3:PutObject',
-					Condition: {
-						StringEquals: {
-							's3:x-amz-acl': 'bucket-owner-full-control',
-						},
-					},
+					Condition: Match.absent(),
 					Principal: {
 						Service: 'logdelivery.elasticloadbalancing.amazonaws.com',
 					},
@@ -139,6 +141,27 @@ test('allows load balancer log delivery to write access logs', () => {
 			]),
 		},
 	});
+});
+
+test('creates the access log bucket policy before enabling load balancer logs', () => {
+	const template = synthesizeTemplate();
+	const templateJson = template.toJSON();
+	const resources = Object.values(templateJson.Resources) as SynthesizedResource[];
+	const loadBalancer = resources.find(
+		(resource) => resource.Type === 'AWS::ElasticLoadBalancingV2::LoadBalancer',
+	);
+
+	assert.ok(loadBalancer);
+
+	const dependsOn = loadBalancer.DependsOn;
+	const dependencies = Array.isArray(dependsOn) ? dependsOn : [dependsOn];
+
+	assert.ok(
+		dependencies.some(
+			(dependency) =>
+				typeof dependency === 'string' && dependency.startsWith('ProxyAccessLogBucketPolicy'),
+		),
+	);
 });
 
 test('defines a private Fargate service for proxy tasks', () => {
@@ -384,6 +407,7 @@ test('defines proxy CloudWatch alarms', () => {
 		EvaluationPeriods: 2,
 		MetricName: 'ActiveStreams',
 		Namespace: 'InternalAiGateway/Proxy',
+		Statistic: 'Maximum',
 		Threshold: 180,
 		TreatMissingData: 'notBreaching',
 	});
@@ -402,6 +426,7 @@ test('defines proxy CloudWatch alarms', () => {
 		EvaluationPeriods: 2,
 		MetricName: 'UnHealthyHostCount',
 		Namespace: 'AWS/ApplicationELB',
+		Statistic: 'Maximum',
 		Threshold: 1,
 		TreatMissingData: 'notBreaching',
 	});
