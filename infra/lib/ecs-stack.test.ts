@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
 
@@ -56,6 +56,14 @@ test('defines the proxy container port and runtime environment', () => {
 				Essential: true,
 				Environment: [
 					{
+						Name: 'ACTIVE_STREAM_METRIC_INTERVAL_SECONDS',
+						Value: '15',
+					},
+					{
+						Name: 'MAX_ACTIVE_STREAMS',
+						Value: '200',
+					},
+					{
 						Name: 'PORT',
 						Value: '8080',
 					},
@@ -88,7 +96,7 @@ test('defines a private Fargate service for proxy tasks', () => {
 
 	template.hasResourceProperties('AWS::ECS::Service', {
 		ServiceName: 'internal-ai-gateway-proxy',
-		DesiredCount: 2,
+		DesiredCount: 3,
 		EnableECSManagedTags: true,
 		DeploymentConfiguration: {
 			DeploymentCircuitBreaker: {
@@ -110,6 +118,12 @@ test('defines a public application load balancer for proxy traffic', () => {
 	const template = synthesizeTemplate();
 
 	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+		LoadBalancerAttributes: Match.arrayWith([
+			{
+				Key: 'idle_timeout.timeout_seconds',
+				Value: '300',
+			},
+		]),
 		Scheme: 'internet-facing',
 		Type: 'application',
 	});
@@ -139,13 +153,26 @@ test('defines the proxy target group health check', () => {
 
 	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
 		HealthCheckPath: '/health',
-		HealthCheckIntervalSeconds: 30,
+		HealthCheckIntervalSeconds: 10,
 		HealthCheckTimeoutSeconds: 5,
 		HealthyThresholdCount: 2,
 		UnhealthyThresholdCount: 3,
 		Matcher: {
 			HttpCode: '200',
 		},
+	});
+});
+
+test('defines target draining for long-running proxy streams', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+		TargetGroupAttributes: Match.arrayWith([
+			{
+				Key: 'deregistration_delay.timeout_seconds',
+				Value: '300',
+			},
+		]),
 	});
 });
 
@@ -179,8 +206,8 @@ test('defines autoscaling limits for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
 	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
-		MaxCapacity: 10,
-		MinCapacity: 2,
+		MaxCapacity: 30,
+		MinCapacity: 3,
 		ScalableDimension: 'ecs:service:DesiredCount',
 		ServiceNamespace: 'ecs',
 	});
@@ -206,6 +233,67 @@ test('defines CPU and memory target tracking scaling policies', () => {
 				PredefinedMetricType: 'ECSServiceAverageMemoryUtilization',
 			},
 			TargetValue: 60,
+		},
+	});
+});
+
+test('defines request-count target tracking for proxy tasks', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+		PolicyType: 'TargetTrackingScaling',
+		TargetTrackingScalingPolicyConfiguration: {
+			PredefinedMetricSpecification: {
+				PredefinedMetricType: 'ALBRequestCountPerTarget',
+			},
+			ScaleInCooldown: 120,
+			ScaleOutCooldown: 60,
+			TargetValue: 1000,
+		},
+	});
+});
+
+test('allows proxy tasks to publish active stream metrics', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: 'cloudwatch:PutMetricData',
+					Condition: {
+						StringEquals: {
+							'cloudwatch:namespace': 'InternalAiGateway/Proxy',
+						},
+					},
+					Resource: '*',
+				}),
+			]),
+		},
+	});
+});
+
+test('defines active-stream target tracking for proxy tasks', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+		PolicyType: 'TargetTrackingScaling',
+		TargetTrackingScalingPolicyConfiguration: {
+			CustomizedMetricSpecification: {
+				Dimensions: [
+					{
+						Name: 'ServiceName',
+						Value: 'internal-ai-gateway-proxy',
+					},
+				],
+				MetricName: 'ActiveStreams',
+				Namespace: 'InternalAiGateway/Proxy',
+				Statistic: 'Average',
+				Unit: 'Count',
+			},
+			ScaleInCooldown: 180,
+			ScaleOutCooldown: 30,
+			TargetValue: 150,
 		},
 	});
 });
