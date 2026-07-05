@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
+use aws_sdk_dynamodb::config::BehaviorVersion;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use tower::ServiceExt;
 
+use crate::api_key::ApiKeyHasher;
 use crate::app::{AppState, app};
-use crate::auth::ApiKeyHasher;
+use crate::auth::RequestAuthenticator;
+use crate::engineer_auth::EngineerAuth;
 
 #[tokio::test]
 async fn returns_healthy_status_from_health_route() {
@@ -52,5 +55,19 @@ async fn returns_not_found_for_unknown_routes() {
 }
 
 fn test_app() -> axum::Router {
-    app(AppState::new(Arc::new(ApiKeyHasher::new("test-secret"))))
+    let api_key_hasher = Arc::new(ApiKeyHasher::new("test-secret"));
+    let engineer_auth = Arc::new(EngineerAuth::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "engineers",
+        "ApiKeyIndex",
+    ));
+
+    app(AppState::new(Arc::new(RequestAuthenticator::new(
+        api_key_hasher,
+        engineer_auth,
+    ))))
 }

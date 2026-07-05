@@ -17,20 +17,20 @@ test('defines the DynamoDB tables for the gateway', () => {
 	}
 });
 
-test('defines engineers table with api_key lookup index', () => {
+test('defines engineers table with api_key_hash lookup index', () => {
 	const template = synthesizeTemplate();
 
 	template.hasResourceProperties('AWS::DynamoDB::Table', {
 		KeySchema: [{ AttributeName: 'user_id', KeyType: 'HASH' }],
 		AttributeDefinitions: Match.arrayWith([
 			{ AttributeName: 'user_id', AttributeType: 'S' },
-			{ AttributeName: 'api_key', AttributeType: 'S' },
+			{ AttributeName: 'api_key_hash', AttributeType: 'S' },
 		]),
 		BillingMode: 'PAY_PER_REQUEST',
 		GlobalSecondaryIndexes: [
 			{
 				IndexName: 'ApiKeyIndex',
-				KeySchema: [{ AttributeName: 'api_key', KeyType: 'HASH' }],
+				KeySchema: [{ AttributeName: 'api_key_hash', KeyType: 'HASH' }],
 				Projection: { ProjectionType: 'ALL' },
 			},
 		],

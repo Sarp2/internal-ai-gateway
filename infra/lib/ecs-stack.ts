@@ -16,6 +16,7 @@ import {
 	TreatMissingData,
 	Unit,
 } from 'aws-cdk-lib/aws-cloudwatch';
+import type { Table } from 'aws-cdk-lib/aws-dynamodb';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Peer, Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
 import {
@@ -54,6 +55,8 @@ const proxyServiceName = 'internal-ai-gateway-proxy';
 const proxyAccessLogPrefix = 'alb';
 
 type EcsStackProps = StackProps & {
+	engineersApiKeyIndexName: string;
+	engineersTable: Table;
 	proxyApiKeyHashSecret: Secret;
 	vpc: Vpc;
 };
@@ -130,7 +133,14 @@ export class EcsStack extends Stack {
 				},
 			}),
 		);
+
 		props.proxyApiKeyHashSecret.grantRead(this.proxyTaskDefinition.taskRole);
+		this.proxyTaskDefinition.addToTaskRolePolicy(
+			new PolicyStatement({
+				actions: ['dynamodb:Query'],
+				resources: [`${props.engineersTable.tableArn}/index/${props.engineersApiKeyIndexName}`],
+			}),
+		);
 
 		this.proxyTaskDefinition.addContainer('ProxyContainer', {
 			containerName: 'proxy',
@@ -149,6 +159,8 @@ export class EcsStack extends Stack {
 			essential: true,
 			environment: {
 				ACTIVE_STREAM_METRIC_INTERVAL_SECONDS: '15',
+				ENGINEERS_API_KEY_INDEX_NAME: props.engineersApiKeyIndexName,
+				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
 				PORT: String(proxyContainerPort),
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,

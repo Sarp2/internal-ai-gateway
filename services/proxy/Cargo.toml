@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 aws-config = "1.8.18"
 aws-sdk-cloudwatch = "1.118.0"
+aws-sdk-dynamodb = "1.105.0"
 aws-sdk-secretsmanager = "1.108.0"
 axum = "0.8"
 hex = "0.4"

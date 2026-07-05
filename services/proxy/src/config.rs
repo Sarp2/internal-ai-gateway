@@ -9,6 +9,8 @@ const DEFAULT_METRIC_INTERVAL_SECONDS: u64 = 15;
 
 #[derive(Debug)]
 pub struct ProxyConfig {
+    pub engineers_api_key_index_name: String,
+    pub engineers_table_name: String,
     pub port: u16,
     pub max_active_streams: usize,
     pub metric_interval: Duration,
@@ -24,6 +26,14 @@ impl ProxyConfig {
         read_value: impl Fn(&str) -> Option<String>,
     ) -> Result<Self, ProxyConfigError> {
         Ok(Self {
+            engineers_api_key_index_name: required_value(
+                read_value("ENGINEERS_API_KEY_INDEX_NAME"),
+                "ENGINEERS_API_KEY_INDEX_NAME",
+            )?,
+            engineers_table_name: required_value(
+                read_value("ENGINEERS_TABLE_NAME"),
+                "ENGINEERS_TABLE_NAME",
+            )?,
             port: parse_value(read_value("PORT"), DEFAULT_PORT),
             max_active_streams: parse_value(
                 read_value("MAX_ACTIVE_STREAMS"),

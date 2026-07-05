@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { DynamoDbStack } from './dynamodb-stack.ts';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
 
@@ -65,6 +66,14 @@ test('defines the proxy container port and runtime environment', () => {
 					{
 						Name: 'ACTIVE_STREAM_METRIC_INTERVAL_SECONDS',
 						Value: '15',
+					},
+					{
+						Name: 'ENGINEERS_API_KEY_INDEX_NAME',
+						Value: 'ApiKeyIndex',
+					},
+					{
+						Name: 'ENGINEERS_TABLE_NAME',
+						Value: Match.anyValue(),
 					},
 					{
 						Name: 'MAX_ACTIVE_STREAMS',
@@ -375,6 +384,22 @@ test('allows proxy tasks to read the api key hash secret', () => {
 	});
 });
 
+test('allows proxy tasks to query engineers by api key hash', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: 'dynamodb:Query',
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -486,10 +511,13 @@ test('defines deploy outputs for proxy endpoints and access logs', () => {
 
 function synthesizeTemplate(): Template {
 	const app = new App();
+	const dynamoDbStack = new DynamoDbStack(app, 'TestDynamoDbStack');
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
 	const secretsStack = new Stack(app, 'TestSecretsStack');
 	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
+		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
+		engineersTable: dynamoDbStack.engineersTable,
 		proxyApiKeyHashSecret,
 		vpc: networkStack.vpc,
 	});
