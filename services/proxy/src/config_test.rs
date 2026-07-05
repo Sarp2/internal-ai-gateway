@@ -33,3 +33,14 @@ fn falls_back_to_defaults_for_invalid_env_values() {
     assert_eq!(config.max_active_streams, 200);
     assert_eq!(config.metric_interval, Duration::from_secs(15));
 }
+
+#[test]
+fn clamps_zero_values_that_would_disable_runtime_safety() {
+    let config = ProxyConfig::from_values(|name| match name {
+        "MAX_ACTIVE_STREAMS" | "ACTIVE_STREAM_METRIC_INTERVAL_SECONDS" => Some("0".to_string()),
+        _ => None,
+    });
+
+    assert_eq!(config.max_active_streams, 1);
+    assert_eq!(config.metric_interval, Duration::from_secs(1));
+}

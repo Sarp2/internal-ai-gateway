@@ -34,6 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = ProxyConfig::from_env();
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
+    // TODO: Wire this tracker into the streaming proxy route so ActiveStreams reflects
+    // live streams and MAX_ACTIVE_STREAMS is enforced for real proxy traffic.
     start_active_stream_metric_publisher(
         Arc::clone(&stream_tracker),
         config.metric_interval,

@@ -13,6 +13,7 @@ pub async fn shutdown_signal() {
             }
             Err(error) => {
                 tracing::error!(%error, "failed to install terminate signal handler");
+                std::future::pending::<()>().await;
             }
         }
     };

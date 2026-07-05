@@ -22,11 +22,15 @@ impl ProxyConfig {
             max_active_streams: parse_value(
                 read_value("MAX_ACTIVE_STREAMS"),
                 DEFAULT_MAX_ACTIVE_STREAMS,
+            )
+            .max(1),
+            metric_interval: Duration::from_secs(
+                parse_value(
+                    read_value("ACTIVE_STREAM_METRIC_INTERVAL_SECONDS"),
+                    DEFAULT_METRIC_INTERVAL_SECONDS,
+                )
+                .max(1),
             ),
-            metric_interval: Duration::from_secs(parse_value(
-                read_value("ACTIVE_STREAM_METRIC_INTERVAL_SECONDS"),
-                DEFAULT_METRIC_INTERVAL_SECONDS,
-            )),
         }
     }
 }
