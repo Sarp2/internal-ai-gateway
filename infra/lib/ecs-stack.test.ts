@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { App } from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
 
@@ -72,6 +73,10 @@ test('defines the proxy container port and runtime environment', () => {
 					{
 						Name: 'PORT',
 						Value: '8080',
+					},
+					{
+						Name: 'PROXY_API_KEY_HASH_SECRET_ARN',
+						Value: Match.anyValue(),
 					},
 					{
 						Name: 'RUST_LOG',
@@ -354,6 +359,22 @@ test('allows proxy tasks to publish active stream metrics', () => {
 	});
 });
 
+test('allows proxy tasks to read the api key hash secret', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -466,7 +487,10 @@ test('defines deploy outputs for proxy endpoints and access logs', () => {
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
+	const secretsStack = new Stack(app, 'TestSecretsStack');
+	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
+		proxyApiKeyHashSecret,
 		vpc: networkStack.vpc,
 	});
 

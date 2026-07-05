@@ -6,6 +6,7 @@ import type { Construct } from 'constructs';
 export class SecretsStack extends Stack {
 	public readonly anthropicApiKeySecret: Secret;
 	public readonly openAiApiKeySecret: Secret;
+	public readonly proxyApiKeyHashSecret: Secret;
 
 	public constructor(scope: Construct, id: string, props?: StackProps) {
 		super(scope, id, props);
@@ -17,6 +18,15 @@ export class SecretsStack extends Stack {
 
 		this.openAiApiKeySecret = new Secret(this, 'OpenAiApiKeySecret', {
 			description: 'OpenAI provider API key for the internal AI gateway.',
+			removalPolicy: RemovalPolicy.RETAIN,
+		});
+
+		this.proxyApiKeyHashSecret = new Secret(this, 'ProxyApiKeyHashSecret', {
+			description: 'HMAC secret used to hash proxy API keys.',
+			generateSecretString: {
+				excludePunctuation: true,
+				passwordLength: 64,
+			},
 			removalPolicy: RemovalPolicy.RETAIN,
 		});
 	}
