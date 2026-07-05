@@ -1,0 +1,45 @@
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_97f1770f163704 6,10-11,30-31,40-48,55
+  s_c26b496cd2589a::t_8ad183a23d77d2 19
+  s_c26b496cd2589a::t_7243c42c69f74b 63
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_e733055ddaab41 58-60
+  s_c26b496cd2589a::t_97f1770f163704 7,12-15,24,26-27,32-35,40-47,62-63,68-86
+services/proxy/src/auth_test.rs
+  s_c26b496cd2589a::t_97f1770f163704 1-32
+services/proxy/Cargo.toml
+  s_c26b496cd2589a::t_61cc99e1b0bc5f 9
+  s_c26b496cd2589a::t_97f1770f163704 11-12,14
+services/proxy/src/app_test.rs
+  s_c26b496cd2589a::t_97f1770f163704 1-2,7-8,12,34,53-54
+  s_c26b496cd2589a::t_7243c42c69f74b 55
+  s_c26b496cd2589a::t_4469c820632a2c 56
+services/proxy/src/app.rs
+  s_c26b496cd2589a::t_97f1770f163704 1-2,11,14-15,25-27,31
+  s_c26b496cd2589a::t_7243c42c69f74b 16-24
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_97f1770f163704 2-3,15,19,23-26,40-58,63-64,73,75-78
+  s_c26b496cd2589a::t_e733055ddaab41 74
+  s_c26b496cd2589a::t_7243c42c69f74b 10
+services/proxy/src/auth.rs
+  s_c26b496cd2589a::t_97f1770f163704 1-67,72-84
+  s_c26b496cd2589a::t_e733055ddaab41 68-71
+services/proxy/Cargo.lock
+  s_c26b496cd2589a::t_747bb4fc789ab4 161-185,275,279,767,1009-1017,1545,1547-1548,1550,1824-1834
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6fd21b86184e7d09e59eb7a5ef629b0d4ee6ec2c",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
