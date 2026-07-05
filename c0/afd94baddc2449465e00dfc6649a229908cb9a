@@ -1,0 +1,35 @@
+infra/lib/secrets-stack.ts
+  s_c26b496cd2589a::t_96c00730c1eaab 9,23-29
+  s_c26b496cd2589a::t_11f4ae2dab12db 30-31
+infra/bin/app.ts
+  s_c26b496cd2589a::t_96c00730c1eaab 15,17
+infra/lib/secrets-stack.test.ts
+  s_c26b496cd2589a::t_96c00730c1eaab 10,17-19,40-49
+  s_c26b496cd2589a::t_32d556327105a3 50-51
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_84a5cba8c1e8d8 39,57
+  s_c26b496cd2589a::t_96c00730c1eaab 133,154
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_0a9106a913de18 79,371
+  s_c26b496cd2589a::t_c43981a460f0ba 3,490-491
+  s_c26b496cd2589a::t_96c00730c1eaab 5,77-78,80,362-368,370,493
+  s_c26b496cd2589a::t_3840c6692e4849 369
+  s_c26b496cd2589a::t_b9078afdbf10ed 372-374
+  s_c26b496cd2589a::t_fadca9ad07159c 375-377
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c0afd94baddc2449465e00dfc6649a229908cb9a",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
