@@ -7,12 +7,15 @@ import { SecretsStack } from './secrets-stack.ts';
 test('defines provider API key secrets', () => {
 	const template = synthesizeTemplate();
 
-	template.resourceCountIs('AWS::SecretsManager::Secret', 2);
+	template.resourceCountIs('AWS::SecretsManager::Secret', 3);
 	template.hasResourceProperties('AWS::SecretsManager::Secret', {
 		Description: 'Anthropic provider API key for the internal AI gateway.',
 	});
 	template.hasResourceProperties('AWS::SecretsManager::Secret', {
 		Description: 'OpenAI provider API key for the internal AI gateway.',
+	});
+	template.hasResourceProperties('AWS::SecretsManager::Secret', {
+		Description: 'HMAC secret used to hash proxy API keys.',
 	});
 });
 
@@ -31,6 +34,17 @@ test('generates secret values instead of hardcoding provider keys', () => {
 
 	template.hasResourceProperties('AWS::SecretsManager::Secret', {
 		GenerateSecretString: Match.anyValue(),
+	});
+});
+
+test('generates a strong proxy api key hash secret', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::SecretsManager::Secret', {
+		Description: 'HMAC secret used to hash proxy API keys.',
+		GenerateSecretString: {
+			PasswordLength: 64,
+		},
 	});
 });
 

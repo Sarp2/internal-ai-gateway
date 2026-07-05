@@ -36,6 +36,7 @@ import {
 import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
+import type { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,7 @@ const proxyServiceName = 'internal-ai-gateway-proxy';
 const proxyAccessLogPrefix = 'alb';
 
 type EcsStackProps = StackProps & {
+	proxyApiKeyHashSecret: Secret;
 	vpc: Vpc;
 };
 
@@ -128,6 +130,7 @@ export class EcsStack extends Stack {
 				},
 			}),
 		);
+		props.proxyApiKeyHashSecret.grantRead(this.proxyTaskDefinition.taskRole);
 
 		this.proxyTaskDefinition.addContainer('ProxyContainer', {
 			containerName: 'proxy',
@@ -148,6 +151,7 @@ export class EcsStack extends Stack {
 				ACTIVE_STREAM_METRIC_INTERVAL_SECONDS: '15',
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
 				PORT: String(proxyContainerPort),
+				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RUST_LOG: 'info',
 			},
 			logging: LogDrivers.awsLogs({

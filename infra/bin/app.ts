@@ -12,8 +12,9 @@ const app = new App();
 new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack');
 new LambdaStack(app, 'InternalAiGatewayLambdaStack');
 const networkStack = new NetworkStack(app, 'InternalAiGatewayNetworkStack');
+const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack');
 new EcsStack(app, 'InternalAiGatewayEcsStack', {
+	proxyApiKeyHashSecret: secretsStack.proxyApiKeyHashSecret,
 	vpc: networkStack.vpc,
 });
 new S3Stack(app, 'InternalAiGatewayS3Stack');
-new SecretsStack(app, 'InternalAiGatewaySecretsStack');
