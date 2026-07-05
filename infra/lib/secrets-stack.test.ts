@@ -43,7 +43,6 @@ test('generates a strong proxy api key hash secret', () => {
 	template.hasResourceProperties('AWS::SecretsManager::Secret', {
 		Description: 'HMAC secret used to hash proxy API keys.',
 		GenerateSecretString: {
-			ExcludePunctuation: true,
 			PasswordLength: 64,
 		},
 	});

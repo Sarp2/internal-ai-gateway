@@ -24,7 +24,6 @@ export class SecretsStack extends Stack {
 		this.proxyApiKeyHashSecret = new Secret(this, 'ProxyApiKeyHashSecret', {
 			description: 'HMAC secret used to hash proxy API keys.',
 			generateSecretString: {
-				excludePunctuation: true,
 				passwordLength: 64,
 			},
 			removalPolicy: RemovalPolicy.RETAIN,
