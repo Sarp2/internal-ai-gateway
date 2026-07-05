@@ -81,4 +81,11 @@ impl Display for AuthSecretError {
     }
 }
 
-impl Error for AuthSecretError {}
+impl Error for AuthSecretError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::FetchFailed { source } => Some(source.as_ref()),
+            Self::MissingSecretString | Self::EmptySecretString => None,
+        }
+    }
+}

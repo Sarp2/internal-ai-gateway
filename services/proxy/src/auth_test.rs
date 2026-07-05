@@ -1,4 +1,16 @@
 use crate::auth::ApiKeyHasher;
+use crate::auth::AuthSecretError;
+
+#[derive(Debug)]
+struct TestSourceError;
+
+impl std::fmt::Display for TestSourceError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "source failure")
+    }
+}
+
+impl std::error::Error for TestSourceError {}
 
 #[test]
 fn hashes_api_keys_consistently() {
@@ -28,5 +40,19 @@ fn hash_changes_when_secret_changes() {
     assert_ne!(
         first_hasher.hash_api_key("iag_test_key"),
         second_hasher.hash_api_key("iag_test_key")
+    );
+}
+
+#[test]
+fn exposes_secret_fetch_failure_source() {
+    let error = AuthSecretError::FetchFailed {
+        source: Box::new(TestSourceError),
+    };
+
+    assert_eq!(
+        std::error::Error::source(&error)
+            .expect("source should exist")
+            .to_string(),
+        "source failure"
     );
 }
