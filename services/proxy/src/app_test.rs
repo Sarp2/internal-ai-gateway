@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use tower::ServiceExt;
 
-use crate::app::app;
+use crate::app::{AppState, app};
+use crate::auth::ApiKeyHasher;
 
 #[tokio::test]
 async fn returns_healthy_status_from_health_route() {
-    let response = app()
+    let response = test_app()
         .oneshot(
             Request::builder()
                 .method(Method::GET)
@@ -28,7 +31,7 @@ async fn returns_healthy_status_from_health_route() {
 
 #[tokio::test]
 async fn returns_not_found_for_unknown_routes() {
-    let response = app()
+    let response = test_app()
         .oneshot(
             Request::builder()
                 .method(Method::GET)
@@ -46,4 +49,8 @@ async fn returns_not_found_for_unknown_routes() {
         .expect("not found body should be readable");
 
     assert_eq!(&body[..], br#"{"message":"Route not found."}"#);
+}
+
+fn test_app() -> axum::Router {
+    app(AppState::new(Arc::new(ApiKeyHasher::new("test-secret"))))
 }
