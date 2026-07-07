@@ -11,18 +11,25 @@ use serde_json::json;
 use crate::auth::RequestAuthenticator;
 use crate::health::health;
 use crate::rate_limit::RateLimiter;
+use crate::token_usage::TokenUsageChecker;
 
 #[derive(Clone)]
 pub struct AppState {
     _authenticator: Arc<RequestAuthenticator>,
     _rate_limiter: Arc<RateLimiter>,
+    _token_usage_checker: Arc<TokenUsageChecker>,
 }
 
 impl AppState {
-    pub fn new(authenticator: Arc<RequestAuthenticator>, rate_limiter: Arc<RateLimiter>) -> Self {
+    pub fn new(
+        authenticator: Arc<RequestAuthenticator>,
+        rate_limiter: Arc<RateLimiter>,
+        token_usage_checker: Arc<TokenUsageChecker>,
+    ) -> Self {
         Self {
             _authenticator: authenticator,
             _rate_limiter: rate_limiter,
+            _token_usage_checker: token_usage_checker,
         }
     }
 }

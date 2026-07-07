@@ -10,6 +10,7 @@ use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
 use crate::engineer_auth::EngineerAuth;
 use crate::rate_limit::RateLimiter;
+use crate::token_usage::TokenUsageChecker;
 
 #[tokio::test]
 async fn returns_healthy_status_from_health_route() {
@@ -76,9 +77,18 @@ fn test_app() -> axum::Router {
         120,
         std::time::Duration::from_secs(60),
     ));
+    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "token-usage",
+    ));
 
     app(AppState::new(
         Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth)),
         rate_limiter,
+        token_usage_checker,
     ))
 }

@@ -20,6 +20,7 @@ pub struct ProxyConfig {
     pub rate_limit_requests_per_window: u64,
     pub rate_limit_table_name: String,
     pub rate_limit_window: Duration,
+    pub token_usage_table_name: String,
 }
 
 impl ProxyConfig {
@@ -72,6 +73,10 @@ impl ProxyConfig {
                 )
                 .max(1),
             ),
+            token_usage_table_name: required_value(
+                read_value("TOKEN_USAGE_TABLE_NAME"),
+                "TOKEN_USAGE_TABLE_NAME",
+            )?,
         })
     }
 }

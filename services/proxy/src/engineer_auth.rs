@@ -6,8 +6,10 @@ use aws_sdk_dynamodb::Client as DynamoDbClient;
 use aws_sdk_dynamodb::types::AttributeValue;
 
 const API_KEY_HASH_ATTRIBUTE: &str = "api_key_hash";
+const DAILY_TOKEN_LIMIT_ATTRIBUTE: &str = "daily_token_limit";
 const ENABLED_ATTRIBUTE: &str = "enabled";
 const USER_ID_ATTRIBUTE: &str = "user_id";
+const WEEKLY_TOKEN_LIMIT_ATTRIBUTE: &str = "weekly_token_limit";
 
 #[derive(Clone)]
 pub struct EngineerAuth {
@@ -66,17 +68,26 @@ impl EngineerAuth {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AuthenticatedEngineer {
+    pub daily_token_limit: Option<u64>,
     pub enabled: bool,
     pub user_id: String,
+    pub weekly_token_limit: Option<u64>,
 }
 
 pub(crate) fn authenticated_engineer_from_item(
     item: &HashMap<String, AttributeValue>,
 ) -> Result<AuthenticatedEngineer, EngineerAuthError> {
+    let daily_token_limit = optional_number_attribute(item, DAILY_TOKEN_LIMIT_ATTRIBUTE)?;
     let enabled = required_bool_attribute(item, ENABLED_ATTRIBUTE)?;
     let user_id = required_string_attribute(item, USER_ID_ATTRIBUTE)?;
+    let weekly_token_limit = optional_number_attribute(item, WEEKLY_TOKEN_LIMIT_ATTRIBUTE)?;
 
-    Ok(AuthenticatedEngineer { enabled, user_id })
+    Ok(AuthenticatedEngineer {
+        daily_token_limit,
+        enabled,
+        user_id,
+        weekly_token_limit,
+    })
 }
 
 fn required_bool_attribute(
@@ -100,6 +111,26 @@ fn required_string_attribute(
         _ => Err(EngineerAuthError::InvalidEngineerItem {
             missing_attribute: attribute_name,
         }),
+    }
+}
+
+fn optional_number_attribute(
+    item: &HashMap<String, AttributeValue>,
+    attribute_name: &'static str,
+) -> Result<Option<u64>, EngineerAuthError> {
+    match item.get(attribute_name) {
+        Some(AttributeValue::N(value)) => {
+            value
+                .parse::<u64>()
+                .map(Some)
+                .map_err(|_| EngineerAuthError::InvalidEngineerItem {
+                    missing_attribute: attribute_name,
+                })
+        }
+        Some(_) => Err(EngineerAuthError::InvalidEngineerItem {
+            missing_attribute: attribute_name,
+        }),
+        None => Ok(None),
     }
 }
 
