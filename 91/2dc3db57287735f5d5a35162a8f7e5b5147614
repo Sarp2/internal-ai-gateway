@@ -1,0 +1,67 @@
+infra/lib/dynamodb-stack.ts
+  s_c26b496cd2589a::t_bbbbaa9fc2b46b 11,60-69
+  s_c26b496cd2589a::t_cb69335f451bdd 70-72
+  s_c26b496cd2589a::t_755ff8144bd53c 73
+services/proxy/src/app_test.rs
+  s_c26b496cd2589a::t_313bda52843c0f 13,80-87,92
+services/proxy/src/token_usage_test.rs
+  s_c26b496cd2589a::t_7d0c64bc760e16 53-57,62-63,65,70-90,95-98
+  s_c26b496cd2589a::t_b408ace7e24565 21,23-25,29-31,36-39,41-44,107-110
+  s_c26b496cd2589a::t_7080f47fc04f3e 3-4,7-8,10,12,14-16,18-20,49-52,58-61,64,91-94,99-102,115
+  s_c26b496cd2589a::t_9f4a1629e66966 26-28,32-35
+  s_c26b496cd2589a::t_2d7d7c2688487c 1-2,5-6,66-69
+  s_c26b496cd2589a::t_c4115de4f97210 9,11,13,17,22,40,45-48,103-106,111-114
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_aa88c6c5dfc9f2 6,15-16,187-193,222-224,226-228,234-236
+  s_c26b496cd2589a::t_5a15fc6a6f43f1 17,220,229-233
+  s_c26b496cd2589a::t_7d0c64bc760e16 21-22,26-32,34-59,65,71,130-159,206-207,241,243-248,252-257,275-277,281-282,301-305,309
+  s_c26b496cd2589a::t_b106e357fc5d43 1-2,4-5,7-14,18-20,23-25,202-205,208-210,215-217,238-240,242,249-251,258-261,278-280,306-308,321
+  s_c26b496cd2589a::t_9b8583c7b2a30f 3
+  s_c26b496cd2589a::t_c4115de4f97210 33,72-129,160-186,194-201,211-214,218-219,221,225,237,262-274,283-300,310-320
+  s_c26b496cd2589a::t_9bb01e699c72d9 60-64,66-70
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_f2d9b9add9d3aa 21,36,53,65,90,107,126
+services/proxy/src/engineer_auth_test.rs
+  s_c26b496cd2589a::t_f544956defa5b4 22,25-54
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_6c552d863678ae 23,76-79
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_36767a27009bcb 435,442
+  s_c26b496cd2589a::t_44bcaecdc9e7c8 446-450
+  s_c26b496cd2589a::t_7e7b24e54f642d 103-104,436-441,571
+  s_c26b496cd2589a::t_e1293c7dc04576 443-445
+  s_c26b496cd2589a::t_1b893c780378e7 102
+  s_c26b496cd2589a::t_5890d32014b2c3 105
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_b1c0b49a148b8c 21,34,50-51,78-81,96-105
+services/proxy/src/app.rs
+  s_c26b496cd2589a::t_a773bab4945d03 14,20,24-28,32
+services/proxy/src/engineer_auth.rs
+  s_c26b496cd2589a::t_3f5e4f5cd8f7cd 134-136
+  s_c26b496cd2589a::t_3e5629658aa064 9,12,71,74,80,83,85-90,117-133
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_741b37e2f9646d 62,154-155,157-160,186
+  s_c26b496cd2589a::t_b77a21f088c919 156
+infra/bin/app.ts
+  s_c26b496cd2589a::t_6a4308573132cc 21
+infra/lib/dynamodb-stack.test.ts
+  s_c26b496cd2589a::t_d8586cdb138553 87-89
+  s_c26b496cd2589a::t_09e3bd2547eb82 10,76-86
+  s_c26b496cd2589a::t_0636c577888248 90-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "912dc3db57287735f5d5a35162a8f7e5b5147614",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": null
+    }
+  }
+}
