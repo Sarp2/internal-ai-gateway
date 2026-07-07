@@ -17,6 +17,7 @@ new EcsStack(app, 'InternalAiGatewayEcsStack', {
 	engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 	engineersTable: dynamoDbStack.engineersTable,
 	proxyApiKeyHashSecret: secretsStack.proxyApiKeyHashSecret,
+	rateLimitTable: dynamoDbStack.rateLimitTable,
 	vpc: networkStack.vpc,
 });
 new S3Stack(app, 'InternalAiGatewayS3Stack');

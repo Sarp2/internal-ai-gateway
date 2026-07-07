@@ -9,6 +9,7 @@ use crate::api_key::ApiKeyHasher;
 use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
 use crate::engineer_auth::EngineerAuth;
+use crate::rate_limit::RateLimiter;
 
 #[tokio::test]
 async fn returns_healthy_status_from_health_route() {
@@ -65,9 +66,19 @@ fn test_app() -> axum::Router {
         "engineers",
         "ApiKeyIndex",
     ));
+    let rate_limiter = Arc::new(RateLimiter::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "rate-limits",
+        120,
+        std::time::Duration::from_secs(60),
+    ));
 
-    app(AppState::new(Arc::new(RequestAuthenticator::new(
-        api_key_hasher,
-        engineer_auth,
-    ))))
+    app(AppState::new(
+        Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth)),
+        rate_limiter,
+    ))
 }

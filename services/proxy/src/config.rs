@@ -6,6 +6,8 @@ use std::time::Duration;
 const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_MAX_ACTIVE_STREAMS: usize = 200;
 const DEFAULT_METRIC_INTERVAL_SECONDS: u64 = 15;
+const DEFAULT_RATE_LIMIT_REQUESTS_PER_WINDOW: u64 = 120;
+const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
 
 #[derive(Debug)]
 pub struct ProxyConfig {
@@ -15,6 +17,9 @@ pub struct ProxyConfig {
     pub max_active_streams: usize,
     pub metric_interval: Duration,
     pub proxy_api_key_hash_secret_arn: String,
+    pub rate_limit_requests_per_window: u64,
+    pub rate_limit_table_name: String,
+    pub rate_limit_window: Duration,
 }
 
 impl ProxyConfig {
@@ -51,6 +56,22 @@ impl ProxyConfig {
                 read_value("PROXY_API_KEY_HASH_SECRET_ARN"),
                 "PROXY_API_KEY_HASH_SECRET_ARN",
             )?,
+            rate_limit_requests_per_window: parse_value(
+                read_value("RATE_LIMIT_REQUESTS_PER_WINDOW"),
+                DEFAULT_RATE_LIMIT_REQUESTS_PER_WINDOW,
+            )
+            .max(1),
+            rate_limit_table_name: required_value(
+                read_value("RATE_LIMIT_TABLE_NAME"),
+                "RATE_LIMIT_TABLE_NAME",
+            )?,
+            rate_limit_window: Duration::from_secs(
+                parse_value(
+                    read_value("RATE_LIMIT_WINDOW_SECONDS"),
+                    DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+                )
+                .max(1),
+            ),
         })
     }
 }
