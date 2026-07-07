@@ -19,8 +19,39 @@ fn maps_dynamodb_item_to_authenticated_engineer() {
     assert_eq!(
         authenticated_engineer_from_item(&item).expect("engineer should map"),
         AuthenticatedEngineer {
+            daily_token_limit: None,
             enabled: true,
             user_id: "user-123".to_string(),
+            weekly_token_limit: None,
+        }
+    );
+}
+
+#[test]
+fn maps_optional_token_limits_to_authenticated_engineer() {
+    let item = HashMap::from([
+        (
+            "daily_token_limit".to_string(),
+            AttributeValue::N("1000".to_string()),
+        ),
+        ("enabled".to_string(), AttributeValue::Bool(true)),
+        (
+            "user_id".to_string(),
+            AttributeValue::S("user-123".to_string()),
+        ),
+        (
+            "weekly_token_limit".to_string(),
+            AttributeValue::N("7000".to_string()),
+        ),
+    ]);
+
+    assert_eq!(
+        authenticated_engineer_from_item(&item).expect("engineer should map"),
+        AuthenticatedEngineer {
+            daily_token_limit: Some(1000),
+            enabled: true,
+            user_id: "user-123".to_string(),
+            weekly_token_limit: Some(7000),
         }
     );
 }

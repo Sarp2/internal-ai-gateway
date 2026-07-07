@@ -100,6 +100,10 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: '60',
 					},
 					{
+						Name: 'TOKEN_USAGE_TABLE_NAME',
+						Value: Match.anyValue(),
+					},
+					{
 						Name: 'RUST_LOG',
 						Value: 'info',
 					},
@@ -428,6 +432,22 @@ test('allows proxy tasks to update rate limit counters', () => {
 	});
 });
 
+test('allows proxy tasks to read and update token usage windows', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: ['dynamodb:GetItem', 'dynamodb:TransactWriteItems'],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -548,6 +568,7 @@ function synthesizeTemplate(): Template {
 		engineersTable: dynamoDbStack.engineersTable,
 		proxyApiKeyHashSecret,
 		rateLimitTable: dynamoDbStack.rateLimitTable,
+		tokenUsageTable: dynamoDbStack.tokenUsageTable,
 		vpc: networkStack.vpc,
 	});
 

@@ -8,6 +8,7 @@ export class DynamoDbStack extends Stack {
 	public readonly engineersTable: Table;
 	public readonly messagesTable: Table;
 	public readonly rateLimitTable: Table;
+	public readonly tokenUsageTable: Table;
 
 	public constructor(scope: Construct, id: string, props?: StackProps) {
 		super(scope, id, props);
@@ -51,6 +52,20 @@ export class DynamoDbStack extends Stack {
 			sortKey: {
 				name: 'request_ts',
 				type: AttributeType.NUMBER,
+			},
+			timeToLiveAttribute: 'ttl',
+			billingMode: BillingMode.PAY_PER_REQUEST,
+			removalPolicy: RemovalPolicy.RETAIN,
+		});
+
+		this.tokenUsageTable = new Table(this, 'TokenUsageTable', {
+			partitionKey: {
+				name: 'user_id',
+				type: AttributeType.STRING,
+			},
+			sortKey: {
+				name: 'usage_window',
+				type: AttributeType.STRING,
 			},
 			timeToLiveAttribute: 'ttl',
 			billingMode: BillingMode.PAY_PER_REQUEST,

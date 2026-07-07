@@ -18,6 +18,7 @@ use crate::rate_limit::RateLimiter;
 use crate::shutdown::shutdown_signal;
 use crate::streams::ActiveStreamTracker;
 use crate::telemetry::init_tracing;
+use crate::token_usage::TokenUsageChecker;
 
 pub mod api_key;
 mod app;
@@ -30,6 +31,7 @@ pub mod rate_limit;
 mod shutdown;
 pub mod streams;
 mod telemetry;
+pub mod token_usage;
 
 #[cfg(test)]
 mod api_key_test;
@@ -45,6 +47,8 @@ mod engineer_auth_test;
 mod rate_limit_test;
 #[cfg(test)]
 mod streams_test;
+#[cfg(test)]
+mod token_usage_test;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,6 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.rate_limit_requests_per_window,
         config.rate_limit_window,
     ));
+    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+        DynamoDbClient::new(&aws_config),
+        config.token_usage_table_name.clone(),
+    ));
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
     // TODO: Wire this tracker into the streaming proxy route so ActiveStreams reflects
     // live streams and MAX_ACTIVE_STREAMS is enforced for real proxy traffic.
@@ -85,9 +93,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(%address, "proxy service listening");
 
-    axum::serve(listener, app(AppState::new(authenticator, rate_limiter)))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app(AppState::new(
+            authenticator,
+            rate_limiter,
+            token_usage_checker,
+        )),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     Ok(())
 }

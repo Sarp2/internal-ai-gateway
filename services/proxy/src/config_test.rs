@@ -18,6 +18,7 @@ fn uses_defaults_when_env_values_are_missing() {
     assert_eq!(config.rate_limit_requests_per_window, 120);
     assert_eq!(config.rate_limit_table_name, "rate-limits");
     assert_eq!(config.rate_limit_window, Duration::from_secs(60));
+    assert_eq!(config.token_usage_table_name, "token-usage");
 }
 
 #[test]
@@ -32,6 +33,7 @@ fn parses_env_values() {
         "RATE_LIMIT_REQUESTS_PER_WINDOW" => Some("250".to_string()),
         "RATE_LIMIT_TABLE_NAME" => Some("custom-rate-limits".to_string()),
         "RATE_LIMIT_WINDOW_SECONDS" => Some("120".to_string()),
+        "TOKEN_USAGE_TABLE_NAME" => Some("custom-token-usage".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -48,6 +50,7 @@ fn parses_env_values() {
     assert_eq!(config.rate_limit_requests_per_window, 250);
     assert_eq!(config.rate_limit_table_name, "custom-rate-limits");
     assert_eq!(config.rate_limit_window, Duration::from_secs(120));
+    assert_eq!(config.token_usage_table_name, "custom-token-usage");
 }
 
 #[test]
@@ -59,6 +62,7 @@ fn falls_back_to_defaults_for_invalid_env_values() {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
+        "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         _ => Some("invalid".to_string()),
     })
     .expect("config should parse");
@@ -83,6 +87,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
+        "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -99,6 +104,7 @@ fn rejects_missing_proxy_api_key_hash_secret_arn() {
         "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
         "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
+        "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         _ => None,
     })
     .expect_err("config should fail");
@@ -117,6 +123,7 @@ fn test_value(name: &str) -> Option<String> {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
+        "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         _ => None,
     }
 }

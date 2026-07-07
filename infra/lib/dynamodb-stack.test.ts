@@ -7,7 +7,7 @@ import { DynamoDbStack } from './dynamodb-stack.ts';
 test('defines the DynamoDB tables for the gateway', () => {
 	const template = synthesizeTemplate();
 
-	template.resourceCountIs('AWS::DynamoDB::Table', 3);
+	template.resourceCountIs('AWS::DynamoDB::Table', 4);
 
 	const tables = template.findResources('AWS::DynamoDB::Table');
 
@@ -64,6 +64,26 @@ test('defines rate limit table with TTL for sliding window cleanup', () => {
 		AttributeDefinitions: Match.arrayWith([
 			{ AttributeName: 'user_id', AttributeType: 'S' },
 			{ AttributeName: 'request_ts', AttributeType: 'N' },
+		]),
+		BillingMode: 'PAY_PER_REQUEST',
+		TimeToLiveSpecification: {
+			AttributeName: 'ttl',
+			Enabled: true,
+		},
+	});
+});
+
+test('defines token usage table with TTL for quota windows', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::DynamoDB::Table', {
+		KeySchema: [
+			{ AttributeName: 'user_id', KeyType: 'HASH' },
+			{ AttributeName: 'usage_window', KeyType: 'RANGE' },
+		],
+		AttributeDefinitions: Match.arrayWith([
+			{ AttributeName: 'user_id', AttributeType: 'S' },
+			{ AttributeName: 'usage_window', AttributeType: 'S' },
 		]),
 		BillingMode: 'PAY_PER_REQUEST',
 		TimeToLiveSpecification: {
