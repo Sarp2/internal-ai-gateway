@@ -8,18 +8,18 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::json;
 
-use crate::auth::ApiKeyHasher;
+use crate::auth::RequestAuthenticator;
 use crate::health::health;
 
 #[derive(Clone)]
 pub struct AppState {
-    _api_key_hasher: Arc<ApiKeyHasher>,
+    _authenticator: Arc<RequestAuthenticator>,
 }
 
 impl AppState {
-    pub fn new(api_key_hasher: Arc<ApiKeyHasher>) -> Self {
+    pub fn new(authenticator: Arc<RequestAuthenticator>) -> Self {
         Self {
-            _api_key_hasher: api_key_hasher,
+            _authenticator: authenticator,
         }
     }
 }

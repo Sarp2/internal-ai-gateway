@@ -1,91 +1,103 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
-use aws_sdk_secretsmanager::Client as SecretsManagerClient;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use axum::http::HeaderMap;
 
-type HmacSha256 = Hmac<Sha256>;
+use crate::api_key::ApiKeyHasher;
+use crate::engineer_auth::{AuthenticatedEngineer, EngineerAuth, EngineerAuthError};
+
+const API_KEY_HEADER: &str = "x-api-key";
+const API_KEY_PREFIX: &str = "iag_";
 
 #[derive(Clone)]
-pub struct ApiKeyHasher {
-    secret: Vec<u8>,
+pub struct RequestAuthenticator {
+    api_key_hasher: Arc<ApiKeyHasher>,
+    engineer_auth: Arc<EngineerAuth>,
 }
 
-impl ApiKeyHasher {
-    pub fn new(secret: impl Into<Vec<u8>>) -> Self {
+impl RequestAuthenticator {
+    pub fn new(api_key_hasher: Arc<ApiKeyHasher>, engineer_auth: Arc<EngineerAuth>) -> Self {
         Self {
-            secret: secret.into(),
+            api_key_hasher,
+            engineer_auth,
         }
     }
 
-    pub fn hash_api_key(&self, api_key: &str) -> String {
-        let mut mac = HmacSha256::new_from_slice(&self.secret)
-            .expect("HMAC-SHA256 accepts secret keys of any size");
-        mac.update(api_key.as_bytes());
+    pub async fn authenticate_headers(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<AuthenticatedEngineer, AuthError> {
+        let api_key = read_api_key(headers)?;
+        let api_key_hash = self.api_key_hasher.hash_api_key(api_key);
+        let engineer = self
+            .engineer_auth
+            .find_engineer_by_api_key_hash(&api_key_hash)
+            .await
+            .map_err(AuthError::LookupFailed)?
+            .ok_or(AuthError::InvalidCredentials)?;
 
-        hex::encode(mac.finalize().into_bytes())
+        if !engineer.enabled {
+            return Err(AuthError::DisabledEngineer);
+        }
+
+        Ok(engineer)
     }
 }
 
-pub async fn load_api_key_hasher(
-    secrets_client: &SecretsManagerClient,
-    secret_arn: &str,
-) -> Result<ApiKeyHasher, AuthSecretError> {
-    let output = secrets_client
-        .get_secret_value()
-        .secret_id(secret_arn)
-        .send()
-        .await
-        .map_err(|source| AuthSecretError::FetchFailed {
-            source: Box::new(source),
-        })?;
+pub(crate) fn read_api_key(headers: &HeaderMap) -> Result<&str, AuthError> {
+    let api_key = headers
+        .get(API_KEY_HEADER)
+        .ok_or(AuthError::MissingApiKey)?
+        .to_str()
+        .map_err(|_| AuthError::InvalidApiKeyFormat)?;
 
-    let secret = output
-        .secret_string()
-        .ok_or(AuthSecretError::MissingSecretString)?;
+    validate_api_key(api_key)?;
 
-    if secret.is_empty() {
-        return Err(AuthSecretError::EmptySecretString);
+    Ok(api_key)
+}
+
+fn validate_api_key(api_key: &str) -> Result<(), AuthError> {
+    if api_key.is_empty() || !api_key.starts_with(API_KEY_PREFIX) {
+        return Err(AuthError::InvalidApiKeyFormat);
     }
 
-    Ok(ApiKeyHasher::new(secret.as_bytes().to_vec()))
+    if api_key.chars().any(char::is_whitespace) {
+        return Err(AuthError::InvalidApiKeyFormat);
+    }
+
+    Ok(())
 }
 
 #[derive(Debug)]
-pub enum AuthSecretError {
-    FetchFailed {
-        source: Box<dyn Error + Send + Sync + 'static>,
-    },
-    MissingSecretString,
-    EmptySecretString,
+pub enum AuthError {
+    MissingApiKey,
+    InvalidApiKeyFormat,
+    InvalidCredentials,
+    DisabledEngineer,
+    LookupFailed(EngineerAuthError),
 }
 
-impl Display for AuthSecretError {
+impl Display for AuthError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FetchFailed { source } => {
-                write!(
-                    formatter,
-                    "failed to fetch proxy api key hash secret: {source}"
-                )
-            }
-            Self::MissingSecretString => write!(
-                formatter,
-                "proxy api key hash secret must contain a string value"
-            ),
-            Self::EmptySecretString => {
-                write!(formatter, "proxy api key hash secret must not be empty")
-            }
+            Self::MissingApiKey => write!(formatter, "missing api key"),
+            Self::InvalidApiKeyFormat => write!(formatter, "invalid api key format"),
+            Self::InvalidCredentials => write!(formatter, "invalid api key"),
+            Self::DisabledEngineer => write!(formatter, "engineer is disabled"),
+            Self::LookupFailed(error) => write!(formatter, "engineer auth lookup failed: {error}"),
         }
     }
 }
 
-impl Error for AuthSecretError {
+impl Error for AuthError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::FetchFailed { source } => Some(source.as_ref()),
-            Self::MissingSecretString | Self::EmptySecretString => None,
+            Self::LookupFailed(error) => Some(error),
+            Self::MissingApiKey
+            | Self::InvalidApiKeyFormat
+            | Self::InvalidCredentials
+            | Self::DisabledEngineer => None,
         }
     }
 }

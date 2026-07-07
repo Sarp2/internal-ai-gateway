@@ -9,6 +9,8 @@ fn uses_defaults_when_env_values_are_missing() {
     assert_eq!(config.port, 8080);
     assert_eq!(config.max_active_streams, 200);
     assert_eq!(config.metric_interval, Duration::from_secs(15));
+    assert_eq!(config.engineers_table_name, "engineers");
+    assert_eq!(config.engineers_api_key_index_name, "ApiKeyIndex");
     assert_eq!(
         config.proxy_api_key_hash_secret_arn,
         "arn:aws:secretsmanager:proxy-api-key-hash"
@@ -21,6 +23,8 @@ fn parses_env_values() {
         "PORT" => Some("9090".to_string()),
         "MAX_ACTIVE_STREAMS" => Some("250".to_string()),
         "ACTIVE_STREAM_METRIC_INTERVAL_SECONDS" => Some("30".to_string()),
+        "ENGINEERS_TABLE_NAME" => Some("custom-engineers".to_string()),
+        "ENGINEERS_API_KEY_INDEX_NAME" => Some("CustomApiKeyIndex".to_string()),
         "PROXY_API_KEY_HASH_SECRET_ARN" => Some("arn:aws:secretsmanager:custom".to_string()),
         _ => None,
     })
@@ -29,6 +33,8 @@ fn parses_env_values() {
     assert_eq!(config.port, 9090);
     assert_eq!(config.max_active_streams, 250);
     assert_eq!(config.metric_interval, Duration::from_secs(30));
+    assert_eq!(config.engineers_table_name, "custom-engineers");
+    assert_eq!(config.engineers_api_key_index_name, "CustomApiKeyIndex");
     assert_eq!(
         config.proxy_api_key_hash_secret_arn,
         "arn:aws:secretsmanager:custom"
@@ -37,12 +43,13 @@ fn parses_env_values() {
 
 #[test]
 fn falls_back_to_defaults_for_invalid_env_values() {
-    let config = ProxyConfig::from_values(|name| {
-        if name == "PROXY_API_KEY_HASH_SECRET_ARN" {
+    let config = ProxyConfig::from_values(|name| match name {
+        "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
+        "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
+        "PROXY_API_KEY_HASH_SECRET_ARN" => {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
-        } else {
-            Some("invalid".to_string())
         }
+        _ => Some("invalid".to_string()),
     })
     .expect("config should parse");
 
@@ -55,6 +62,8 @@ fn falls_back_to_defaults_for_invalid_env_values() {
 fn clamps_zero_values_that_would_disable_runtime_safety() {
     let config = ProxyConfig::from_values(|name| match name {
         "MAX_ACTIVE_STREAMS" | "ACTIVE_STREAM_METRIC_INTERVAL_SECONDS" => Some("0".to_string()),
+        "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
+        "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
         "PROXY_API_KEY_HASH_SECRET_ARN" => {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
         }
@@ -68,7 +77,12 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
 
 #[test]
 fn rejects_missing_proxy_api_key_hash_secret_arn() {
-    let error = ProxyConfig::from_values(|_| None).expect_err("config should fail");
+    let error = ProxyConfig::from_values(|name| match name {
+        "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
+        "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
+        _ => None,
+    })
+    .expect_err("config should fail");
 
     assert_eq!(
         error.to_string(),
@@ -78,6 +92,8 @@ fn rejects_missing_proxy_api_key_hash_secret_arn() {
 
 fn test_value(name: &str) -> Option<String> {
     match name {
+        "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
+        "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
         "PROXY_API_KEY_HASH_SECRET_ARN" => {
             Some("arn:aws:secretsmanager:proxy-api-key-hash".to_string())
         }

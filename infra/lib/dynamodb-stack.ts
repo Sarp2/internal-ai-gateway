@@ -4,6 +4,7 @@ import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/a
 import type { Construct } from 'constructs';
 
 export class DynamoDbStack extends Stack {
+	public readonly engineersApiKeyIndexName = 'ApiKeyIndex';
 	public readonly engineersTable: Table;
 	public readonly messagesTable: Table;
 	public readonly rateLimitTable: Table;
@@ -21,9 +22,9 @@ export class DynamoDbStack extends Stack {
 		});
 
 		this.engineersTable.addGlobalSecondaryIndex({
-			indexName: 'ApiKeyIndex',
+			indexName: this.engineersApiKeyIndexName,
 			partitionKey: {
-				name: 'api_key',
+				name: 'api_key_hash',
 				type: AttributeType.STRING,
 			},
 			projectionType: ProjectionType.ALL,
