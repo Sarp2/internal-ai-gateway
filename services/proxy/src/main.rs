@@ -14,6 +14,7 @@ use crate::auth::RequestAuthenticator;
 use crate::config::ProxyConfig;
 use crate::engineer_auth::EngineerAuth;
 use crate::metrics::start_active_stream_metric_publisher;
+use crate::rate_limit::RateLimiter;
 use crate::shutdown::shutdown_signal;
 use crate::streams::ActiveStreamTracker;
 use crate::telemetry::init_tracing;
@@ -25,6 +26,7 @@ mod config;
 pub mod engineer_auth;
 mod health;
 mod metrics;
+pub mod rate_limit;
 mod shutdown;
 pub mod streams;
 mod telemetry;
@@ -39,6 +41,8 @@ mod auth_test;
 mod config_test;
 #[cfg(test)]
 mod engineer_auth_test;
+#[cfg(test)]
+mod rate_limit_test;
 #[cfg(test)]
 mod streams_test;
 
@@ -61,6 +65,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?,
     );
     let authenticator = Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth));
+    let rate_limiter = Arc::new(RateLimiter::new(
+        DynamoDbClient::new(&aws_config),
+        config.rate_limit_table_name.clone(),
+        config.rate_limit_requests_per_window,
+        config.rate_limit_window,
+    ));
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
     // TODO: Wire this tracker into the streaming proxy route so ActiveStreams reflects
     // live streams and MAX_ACTIVE_STREAMS is enforced for real proxy traffic.
@@ -75,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(%address, "proxy service listening");
 
-    axum::serve(listener, app(AppState::new(authenticator)))
+    axum::serve(listener, app(AppState::new(authenticator, rate_limiter)))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

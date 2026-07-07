@@ -88,6 +88,18 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: Match.anyValue(),
 					},
 					{
+						Name: 'RATE_LIMIT_REQUESTS_PER_WINDOW',
+						Value: '120',
+					},
+					{
+						Name: 'RATE_LIMIT_TABLE_NAME',
+						Value: Match.anyValue(),
+					},
+					{
+						Name: 'RATE_LIMIT_WINDOW_SECONDS',
+						Value: '60',
+					},
+					{
 						Name: 'RUST_LOG',
 						Value: 'info',
 					},
@@ -400,6 +412,22 @@ test('allows proxy tasks to query engineers by api key hash', () => {
 	});
 });
 
+test('allows proxy tasks to update rate limit counters', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: 'dynamodb:UpdateItem',
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -519,6 +547,7 @@ function synthesizeTemplate(): Template {
 		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: dynamoDbStack.engineersTable,
 		proxyApiKeyHashSecret,
+		rateLimitTable: dynamoDbStack.rateLimitTable,
 		vpc: networkStack.vpc,
 	});
 

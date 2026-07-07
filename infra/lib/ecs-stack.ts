@@ -58,6 +58,7 @@ type EcsStackProps = StackProps & {
 	engineersApiKeyIndexName: string;
 	engineersTable: Table;
 	proxyApiKeyHashSecret: Secret;
+	rateLimitTable: Table;
 	vpc: Vpc;
 };
 
@@ -142,6 +143,13 @@ export class EcsStack extends Stack {
 			}),
 		);
 
+		this.proxyTaskDefinition.addToTaskRolePolicy(
+			new PolicyStatement({
+				actions: ['dynamodb:UpdateItem'],
+				resources: [props.rateLimitTable.tableArn],
+			}),
+		);
+
 		this.proxyTaskDefinition.addContainer('ProxyContainer', {
 			containerName: 'proxy',
 			image: ContainerImage.fromAsset(repositoryRoot, {
@@ -164,6 +172,9 @@ export class EcsStack extends Stack {
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
 				PORT: String(proxyContainerPort),
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
+				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
+				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,
+				RATE_LIMIT_WINDOW_SECONDS: '60',
 				RUST_LOG: 'info',
 			},
 			logging: LogDrivers.awsLogs({
