@@ -5,11 +5,13 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode};
 use tower::ServiceExt;
 
+use crate::anthropic;
 use crate::api_key::ApiKeyHasher;
 use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
 use crate::engineer_auth::EngineerAuth;
 use crate::rate_limit::RateLimiter;
+use crate::streams::ActiveStreamTracker;
 use crate::token_usage::TokenUsageChecker;
 
 #[tokio::test]
@@ -87,8 +89,10 @@ fn test_app() -> axum::Router {
     ));
 
     app(AppState::new(
+        Arc::new(anthropic::test_proxy("test-anthropic-api-key")),
         Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth)),
         rate_limiter,
+        Arc::new(ActiveStreamTracker::new(200)),
         token_usage_checker,
     ))
 }

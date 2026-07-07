@@ -11,6 +11,7 @@ const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
 
 #[derive(Debug)]
 pub struct ProxyConfig {
+    pub anthropic_api_key_secret_arn: String,
     pub engineers_api_key_index_name: String,
     pub engineers_table_name: String,
     pub port: u16,
@@ -32,6 +33,10 @@ impl ProxyConfig {
         read_value: impl Fn(&str) -> Option<String>,
     ) -> Result<Self, ProxyConfigError> {
         Ok(Self {
+            anthropic_api_key_secret_arn: required_value(
+                read_value("ANTHROPIC_API_KEY_SECRET_ARN"),
+                "ANTHROPIC_API_KEY_SECRET_ARN",
+            )?,
             engineers_api_key_index_name: required_value(
                 read_value("ENGINEERS_API_KEY_INDEX_NAME"),
                 "ENGINEERS_API_KEY_INDEX_NAME",

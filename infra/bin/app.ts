@@ -8,15 +8,20 @@ import { S3Stack } from '../lib/s3-stack.ts';
 import { SecretsStack } from '../lib/secrets-stack.ts';
 
 const app = new App();
+const proxyCertificateArn = app.node.tryGetContext('proxyCertificateArn') as string | undefined;
+const proxyDomainName = app.node.tryGetContext('proxyDomainName') as string | undefined;
 
 const dynamoDbStack = new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack');
 new LambdaStack(app, 'InternalAiGatewayLambdaStack');
 const networkStack = new NetworkStack(app, 'InternalAiGatewayNetworkStack');
 const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack');
 new EcsStack(app, 'InternalAiGatewayEcsStack', {
+	anthropicApiKeySecret: secretsStack.anthropicApiKeySecret,
 	engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 	engineersTable: dynamoDbStack.engineersTable,
 	proxyApiKeyHashSecret: secretsStack.proxyApiKeyHashSecret,
+	...(proxyCertificateArn ? { proxyCertificateArn } : {}),
+	...(proxyDomainName ? { proxyDomainName } : {}),
 	rateLimitTable: dynamoDbStack.rateLimitTable,
 	tokenUsageTable: dynamoDbStack.tokenUsageTable,
 	vpc: networkStack.vpc,
