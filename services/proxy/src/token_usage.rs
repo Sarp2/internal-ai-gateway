@@ -80,13 +80,24 @@ impl TokenUsageChecker {
         engineer: &AuthenticatedEngineer,
         input_tokens: u64,
     ) -> Result<(), TokenUsageError> {
-        self.record_tokens(engineer, input_tokens).await
+        self.record_tokens_with_limit(engineer, input_tokens, true)
+            .await
     }
 
     pub async fn record_tokens(
         &self,
         engineer: &AuthenticatedEngineer,
         token_count: u64,
+    ) -> Result<(), TokenUsageError> {
+        self.record_tokens_with_limit(engineer, token_count, false)
+            .await
+    }
+
+    async fn record_tokens_with_limit(
+        &self,
+        engineer: &AuthenticatedEngineer,
+        token_count: u64,
+        enforce_limit: bool,
     ) -> Result<(), TokenUsageError> {
         if token_count == 0 {
             return Ok(());
@@ -100,7 +111,9 @@ impl TokenUsageChecker {
             &engineer.user_id,
             &daily_usage_window(now),
             token_count,
-            engineer.daily_token_limit,
+            enforce_limit
+                .then_some(engineer.daily_token_limit)
+                .flatten(),
             token_usage_ttl_epoch_seconds(daily_window_start, DAILY_WINDOW_SECONDS),
             TokenUsageError::DailyLimitExceeded,
         )?;
@@ -109,7 +122,9 @@ impl TokenUsageChecker {
             &engineer.user_id,
             &weekly_usage_window(now),
             token_count,
-            engineer.weekly_token_limit,
+            enforce_limit
+                .then_some(engineer.weekly_token_limit)
+                .flatten(),
             token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS),
             TokenUsageError::WeeklyLimitExceeded,
         )?;
