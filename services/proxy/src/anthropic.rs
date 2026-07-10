@@ -90,7 +90,11 @@ impl AnthropicProxy {
                 .bytes()
                 .await
                 .map_err(AnthropicProxyError::ProviderRequestFailed)?;
-            record_usage_from_json_body(&token_usage_checker, &engineer, &body).await?;
+            if let Err(error) =
+                record_usage_from_json_body(&token_usage_checker, &engineer, &body).await
+            {
+                warn!(%error, "failed to record non-streaming Anthropic token usage");
+            }
 
             return response_builder
                 .body(Body::from(body))
