@@ -220,52 +220,22 @@ fn usage_recording_stream(
     stream::unfold(
         (
             provider_stream,
-            AnthropicStreamUsage::default(),
-            Vec::<u8>::new(),
-            token_usage_checker,
-            engineer,
+            AnthropicStreamUsageRecorder::new(token_usage_checker, engineer),
             Some(stream_guard),
         ),
-        |(
-            mut provider_stream,
-            mut usage,
-            mut buffered_event,
-            token_usage_checker,
-            engineer,
-            stream_guard,
-        )| async move {
+        |(mut provider_stream, mut usage_recorder, stream_guard)| async move {
             match provider_stream.next().await {
                 Some(Ok(chunk)) => {
-                    usage.observe_chunk(&chunk, &mut buffered_event);
+                    usage_recorder.observe_chunk(&chunk);
 
-                    Some((
-                        Ok(chunk),
-                        (
-                            provider_stream,
-                            usage,
-                            buffered_event,
-                            token_usage_checker,
-                            engineer,
-                            stream_guard,
-                        ),
-                    ))
+                    Some((Ok(chunk), (provider_stream, usage_recorder, stream_guard)))
                 }
                 Some(Err(error)) => Some((
                     Err(Box::new(error) as Box<dyn Error + Send + Sync>),
-                    (
-                        provider_stream,
-                        usage,
-                        buffered_event,
-                        token_usage_checker,
-                        engineer,
-                        stream_guard,
-                    ),
+                    (provider_stream, usage_recorder, stream_guard),
                 )),
                 None => {
-                    if let Some(usage) = usage.finish()
-                        && let Err(error) =
-                            record_anthropic_usage(&token_usage_checker, &engineer, usage).await
-                    {
+                    if let Err(error) = usage_recorder.record_observed_usage().await {
                         warn!(%error, "failed to record Anthropic streaming token usage");
                     }
 
@@ -275,6 +245,62 @@ fn usage_recording_stream(
             }
         },
     )
+}
+
+struct AnthropicStreamUsageRecorder {
+    buffered_event: Vec<u8>,
+    engineer: AuthenticatedEngineer,
+    recording_attempted: bool,
+    token_usage_checker: Arc<TokenUsageChecker>,
+    usage: AnthropicStreamUsage,
+}
+
+impl AnthropicStreamUsageRecorder {
+    fn new(token_usage_checker: Arc<TokenUsageChecker>, engineer: AuthenticatedEngineer) -> Self {
+        Self {
+            buffered_event: Vec::new(),
+            engineer,
+            recording_attempted: false,
+            token_usage_checker,
+            usage: AnthropicStreamUsage::default(),
+        }
+    }
+
+    fn observe_chunk(&mut self, chunk: &[u8]) {
+        self.usage.observe_chunk(chunk, &mut self.buffered_event);
+    }
+
+    async fn record_observed_usage(&mut self) -> Result<(), AnthropicProxyError> {
+        self.recording_attempted = true;
+
+        let Some(usage) = self.usage.observed_usage() else {
+            return Ok(());
+        };
+
+        record_anthropic_usage(&self.token_usage_checker, &self.engineer, usage).await
+    }
+}
+
+impl Drop for AnthropicStreamUsageRecorder {
+    fn drop(&mut self) {
+        if self.recording_attempted {
+            return;
+        }
+
+        let Some(usage) = self.usage.observed_usage() else {
+            return;
+        };
+
+        let token_usage_checker = Arc::clone(&self.token_usage_checker);
+        let engineer = self.engineer.clone();
+
+        tokio::spawn(async move {
+            if let Err(error) = record_anthropic_usage(&token_usage_checker, &engineer, usage).await
+            {
+                warn!(%error, "failed to record dropped Anthropic streaming token usage");
+            }
+        });
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -318,6 +344,10 @@ impl AnthropicStreamUsage {
     }
 
     pub(crate) fn finish(self) -> Option<AnthropicUsage> {
+        self.usage.has_usage().then_some(self.usage)
+    }
+
+    fn observed_usage(&self) -> Option<AnthropicUsage> {
         self.usage.has_usage().then_some(self.usage)
     }
 
