@@ -298,7 +298,12 @@ impl Drop for AnthropicStreamUsageRecorder {
         let token_usage_checker = Arc::clone(&self.token_usage_checker);
         let engineer = self.engineer.clone();
 
-        tokio::spawn(async move {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            warn!("failed to record dropped Anthropic streaming token usage: no Tokio runtime");
+            return;
+        };
+
+        handle.spawn(async move {
             if let Err(error) = record_anthropic_usage(&token_usage_checker, &engineer, usage).await
             {
                 warn!(%error, "failed to record dropped Anthropic streaming token usage");
@@ -347,11 +352,7 @@ impl AnthropicStreamUsage {
         }
     }
 
-    pub(crate) fn finish(self) -> Option<AnthropicUsage> {
-        self.usage.has_usage().then_some(self.usage)
-    }
-
-    fn observed_usage(&self) -> Option<AnthropicUsage> {
+    pub(crate) fn observed_usage(&self) -> Option<AnthropicUsage> {
         self.usage.has_usage().then_some(self.usage)
     }
 

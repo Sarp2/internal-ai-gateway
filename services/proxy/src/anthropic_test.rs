@@ -171,7 +171,7 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
     );
 
     assert_eq!(
-        usage.finish(),
+        usage.observed_usage(),
         Some(AnthropicUsage {
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
@@ -197,7 +197,7 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
 		&mut buffer,
 	);
 
-    let usage = usage.finish().expect("usage should parse");
+    let usage = usage.observed_usage().expect("usage should parse");
 
     assert_eq!(
         usage,
@@ -232,7 +232,7 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
     );
 
     assert_eq!(
-        usage.finish(),
+        usage.observed_usage(),
         Some(AnthropicUsage {
             cache_creation_input_tokens: None,
             cache_read_input_tokens: None,
