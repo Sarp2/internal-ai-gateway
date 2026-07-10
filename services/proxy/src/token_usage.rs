@@ -136,9 +136,10 @@ impl TokenUsageChecker {
             .send()
             .await
             .map_err(|source| {
-                if source
-                    .as_service_error()
-                    .is_some_and(|error| error.is_transaction_canceled_exception())
+                if enforce_limit
+                    && source
+                        .as_service_error()
+                        .is_some_and(|error| error.is_transaction_canceled_exception())
                 {
                     TokenUsageError::LimitExceededDuringInputRecording
                 } else {
