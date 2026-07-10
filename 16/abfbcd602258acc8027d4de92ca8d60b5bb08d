@@ -1,0 +1,21 @@
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_54097deaf8778b 250,256-258,282-284
+  s_c26b496cd2589a::t_5fac6a5756c5f2 223,226,229-231,235,238,251-255,259-281,285-305,350-352
+  s_c26b496cd2589a::t_07d4336f4112f0 353
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.11",
+  "base_commit_sha": "16abfbcd602258acc8027d4de92ca8d60b5bb08d",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
