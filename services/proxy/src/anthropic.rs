@@ -5,24 +5,28 @@ use std::time::Duration;
 
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
 use axum::body::Body;
+use axum::body::Bytes;
 use axum::extract::State;
+use axum::http::header::CONTENT_TYPE;
 use axum::http::header::{
     CONNECTION, CONTENT_LENGTH, HOST, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER,
     TRANSFER_ENCODING, UPGRADE,
 };
 use axum::http::{HeaderMap, HeaderName, Request, Response, StatusCode};
 use axum::response::IntoResponse;
-use futures_util::StreamExt;
+use futures_util::stream;
+use futures_util::{Stream, StreamExt};
 use reqwest::Client as HttpClient;
 use reqwest::redirect::Policy;
-use serde_json::json;
-use tracing::error;
+use serde_json::{Value, json};
+use tracing::{error, warn};
 
 use crate::app::AppState;
 use crate::auth::AuthError;
+use crate::engineer_auth::AuthenticatedEngineer;
 use crate::rate_limit::RateLimitError;
 use crate::streams::OwnedActiveStreamGuard;
-use crate::token_usage::TokenUsageError;
+use crate::token_usage::{TokenUsageChecker, TokenUsageError};
 
 const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const INTERNAL_API_KEY_HEADER: &str = "x-api-key";
@@ -50,6 +54,8 @@ impl AnthropicProxy {
     async fn forward_messages(
         &self,
         request: Request<Body>,
+        engineer: AuthenticatedEngineer,
+        token_usage_checker: Arc<TokenUsageChecker>,
         stream_guard: OwnedActiveStreamGuard,
     ) -> Result<Response<Body>, AnthropicProxyError> {
         let (parts, body) = request.into_parts();
@@ -71,6 +77,7 @@ impl AnthropicProxy {
             .await
             .map_err(AnthropicProxyError::ProviderRequestFailed)?;
 
+        let is_streaming_response = is_event_stream_response(provider_response.headers());
         let mut response_builder = Response::builder().status(
             StatusCode::from_u16(provider_response.status().as_u16())
                 .unwrap_or(StatusCode::BAD_GATEWAY),
@@ -78,10 +85,24 @@ impl AnthropicProxy {
 
         copy_response_headers(provider_response.headers(), response_builder.headers_mut());
 
-        let stream = provider_response.bytes_stream().map(move |chunk| {
-            let _guard = &stream_guard;
-            chunk.map_err(|error| Box::new(error) as Box<dyn Error + Send + Sync>)
-        });
+        if !is_streaming_response {
+            let body = provider_response
+                .bytes()
+                .await
+                .map_err(AnthropicProxyError::ProviderRequestFailed)?;
+            record_usage_from_json_body(&token_usage_checker, &engineer, &body).await?;
+
+            return response_builder
+                .body(Body::from(body))
+                .map_err(AnthropicProxyError::ResponseBuildFailed);
+        }
+
+        let stream = usage_recording_stream(
+            provider_response.bytes_stream(),
+            token_usage_checker,
+            engineer,
+            stream_guard,
+        );
 
         response_builder
             .body(Body::from_stream(stream))
@@ -125,9 +146,228 @@ async fn handle_messages(
 
     state
         .anthropic_proxy
-        .forward_messages(request, stream_guard)
+        .forward_messages(
+            request,
+            engineer,
+            Arc::clone(&state.token_usage_checker),
+            stream_guard,
+        )
         .await
         .map_err(AnthropicRouteError::Proxy)
+}
+
+fn is_event_stream_response(headers: &HeaderMap) -> bool {
+    headers
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.to_ascii_lowercase().starts_with("text/event-stream"))
+}
+
+async fn record_anthropic_usage(
+    token_usage_checker: &TokenUsageChecker,
+    engineer: &AuthenticatedEngineer,
+    usage: AnthropicUsage,
+) -> Result<(), AnthropicProxyError> {
+    let token_count = usage.total_tokens();
+
+    if token_count == 0 {
+        return Ok(());
+    }
+
+    token_usage_checker
+        .record_tokens(engineer, token_count)
+        .await
+        .map_err(AnthropicProxyError::TokenUsageRecordFailed)
+}
+
+pub(crate) fn anthropic_usage_from_json_slice(body: &[u8]) -> Option<AnthropicUsage> {
+    let value = serde_json::from_slice::<Value>(body).ok()?;
+
+    anthropic_usage_from_json_value(value.get("usage")?)
+}
+
+fn anthropic_usage_from_json_value(value: &Value) -> Option<AnthropicUsage> {
+    Some(AnthropicUsage {
+        input_tokens: value.get("input_tokens").and_then(Value::as_u64),
+        output_tokens: value.get("output_tokens").and_then(Value::as_u64),
+    })
+    .filter(AnthropicUsage::has_usage)
+}
+
+async fn record_usage_from_json_body(
+    token_usage_checker: &TokenUsageChecker,
+    engineer: &AuthenticatedEngineer,
+    body: &Bytes,
+) -> Result<(), AnthropicProxyError> {
+    let Some(usage) = anthropic_usage_from_json_slice(body) else {
+        warn!("Anthropic response did not include token usage");
+        return Ok(());
+    };
+
+    record_anthropic_usage(token_usage_checker, engineer, usage).await
+}
+
+fn usage_recording_stream(
+    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin,
+    token_usage_checker: Arc<TokenUsageChecker>,
+    engineer: AuthenticatedEngineer,
+    stream_guard: OwnedActiveStreamGuard,
+) -> impl Stream<Item = Result<Bytes, Box<dyn Error + Send + Sync>>> {
+    stream::unfold(
+        (
+            provider_stream,
+            AnthropicStreamUsage::default(),
+            Vec::<u8>::new(),
+            token_usage_checker,
+            engineer,
+            Some(stream_guard),
+        ),
+        |(
+            mut provider_stream,
+            mut usage,
+            mut buffered_event,
+            token_usage_checker,
+            engineer,
+            stream_guard,
+        )| async move {
+            match provider_stream.next().await {
+                Some(Ok(chunk)) => {
+                    usage.observe_chunk(&chunk, &mut buffered_event);
+
+                    Some((
+                        Ok(chunk),
+                        (
+                            provider_stream,
+                            usage,
+                            buffered_event,
+                            token_usage_checker,
+                            engineer,
+                            stream_guard,
+                        ),
+                    ))
+                }
+                Some(Err(error)) => Some((
+                    Err(Box::new(error) as Box<dyn Error + Send + Sync>),
+                    (
+                        provider_stream,
+                        usage,
+                        buffered_event,
+                        token_usage_checker,
+                        engineer,
+                        stream_guard,
+                    ),
+                )),
+                None => {
+                    if let Some(usage) = usage.finish()
+                        && let Err(error) =
+                            record_anthropic_usage(&token_usage_checker, &engineer, usage).await
+                    {
+                        warn!(%error, "failed to record Anthropic streaming token usage");
+                    }
+
+                    drop(stream_guard);
+                    None
+                }
+            }
+        },
+    )
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct AnthropicUsage {
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+}
+
+impl AnthropicUsage {
+    pub(crate) fn total_tokens(&self) -> u64 {
+        self.input_tokens.unwrap_or(0) + self.output_tokens.unwrap_or(0)
+    }
+
+    fn has_usage(&self) -> bool {
+        self.input_tokens.is_some() || self.output_tokens.is_some()
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct AnthropicStreamUsage {
+    usage: AnthropicUsage,
+}
+
+impl AnthropicStreamUsage {
+    pub(crate) fn observe_chunk(&mut self, chunk: &[u8], buffered_event: &mut Vec<u8>) {
+        buffered_event.extend_from_slice(chunk);
+
+        while let Some(event_end) = find_sse_event_end(buffered_event) {
+            let event = buffered_event.drain(..event_end).collect::<Vec<_>>();
+            trim_sse_event_separator(buffered_event);
+            self.observe_event(&event);
+        }
+    }
+
+    pub(crate) fn finish(self) -> Option<AnthropicUsage> {
+        self.usage.has_usage().then_some(self.usage)
+    }
+
+    fn observe_event(&mut self, event: &[u8]) {
+        let Some(data) = sse_event_data(event) else {
+            return;
+        };
+        let Ok(value) = serde_json::from_slice::<Value>(&data) else {
+            return;
+        };
+
+        match value.get("type").and_then(Value::as_str) {
+            Some("message_start") => {
+                if let Some(usage) = value
+                    .get("message")
+                    .and_then(|message| message.get("usage"))
+                    .and_then(anthropic_usage_from_json_value)
+                {
+                    if usage.input_tokens.is_some() {
+                        self.usage.input_tokens = usage.input_tokens;
+                    }
+                    if usage.output_tokens.is_some() {
+                        self.usage.output_tokens = usage.output_tokens;
+                    }
+                }
+            }
+            Some("message_delta") => {
+                if let Some(usage) = value.get("usage").and_then(anthropic_usage_from_json_value)
+                    && usage.output_tokens.is_some()
+                {
+                    self.usage.output_tokens = usage.output_tokens;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn find_sse_event_end(buffer: &[u8]) -> Option<usize> {
+    buffer
+        .windows(2)
+        .position(|window| window == b"\n\n")
+        .or_else(|| buffer.windows(4).position(|window| window == b"\r\n\r\n"))
+}
+
+fn trim_sse_event_separator(buffer: &mut Vec<u8>) {
+    if buffer.starts_with(b"\r\n\r\n") {
+        buffer.drain(..4);
+    } else if buffer.starts_with(b"\n\n") {
+        buffer.drain(..2);
+    }
+}
+
+fn sse_event_data(event: &[u8]) -> Option<Vec<u8>> {
+    let event_text = String::from_utf8_lossy(event);
+    let data_lines = event_text
+        .lines()
+        .filter_map(|line| line.strip_prefix("data:"))
+        .map(str::trim_start)
+        .collect::<Vec<_>>();
+
+    (!data_lines.is_empty()).then(|| data_lines.join("\n").into_bytes())
 }
 
 fn copy_response_headers(provider_headers: &HeaderMap, response_headers: Option<&mut HeaderMap>) {
@@ -314,6 +554,7 @@ impl Error for AnthropicRouteError {
 pub enum AnthropicProxyError {
     ProviderRequestFailed(reqwest::Error),
     ResponseBuildFailed(axum::http::Error),
+    TokenUsageRecordFailed(TokenUsageError),
 }
 
 impl Display for AnthropicProxyError {
@@ -325,6 +566,9 @@ impl Display for AnthropicProxyError {
             Self::ResponseBuildFailed(error) => {
                 write!(formatter, "failed to build Anthropic response: {error}")
             }
+            Self::TokenUsageRecordFailed(error) => {
+                write!(formatter, "failed to record Anthropic token usage: {error}")
+            }
         }
     }
 }
@@ -334,6 +578,7 @@ impl Error for AnthropicProxyError {
         match self {
             Self::ProviderRequestFailed(error) => Some(error),
             Self::ResponseBuildFailed(error) => Some(error),
+            Self::TokenUsageRecordFailed(error) => Some(error),
         }
     }
 }

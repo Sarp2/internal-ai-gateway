@@ -2,8 +2,8 @@ use axum::http::HeaderMap;
 use axum::http::header::{CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING};
 
 use crate::anthropic::{
-    ConnectionHeaderNames, should_forward_request_header, should_forward_response_header,
-    test_header,
+    AnthropicStreamUsage, AnthropicUsage, ConnectionHeaderNames, anthropic_usage_from_json_slice,
+    should_forward_request_header, should_forward_response_header, test_header,
 };
 
 #[test]
@@ -109,4 +109,80 @@ fn strips_connection_nominated_response_headers() {
         &test_header("x-provider-hop"),
         &connection_headers
     ));
+}
+
+#[test]
+fn extracts_usage_from_non_streaming_response_body() {
+    let usage = anthropic_usage_from_json_slice(
+        br#"{"id":"msg_123","usage":{"input_tokens":25,"output_tokens":15}}"#,
+    )
+    .expect("usage should parse");
+
+    assert_eq!(
+        usage,
+        AnthropicUsage {
+            input_tokens: Some(25),
+            output_tokens: Some(15),
+        }
+    );
+    assert_eq!(usage.total_tokens(), 40);
+}
+
+#[test]
+fn ignores_non_streaming_response_without_usage() {
+    assert!(anthropic_usage_from_json_slice(br#"{"type":"error"}"#).is_none());
+}
+
+#[test]
+fn extracts_usage_from_streaming_events() {
+    let mut usage = AnthropicStreamUsage::default();
+    let mut buffer = Vec::new();
+
+    usage.observe_chunk(
+        br#"event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":25,"output_tokens":1}}}
+
+event: message_delta
+data: {"type":"message_delta","usage":{"output_tokens":15}}
+
+"#,
+        &mut buffer,
+    );
+
+    assert_eq!(
+        usage.finish(),
+        Some(AnthropicUsage {
+            input_tokens: Some(25),
+            output_tokens: Some(15),
+        })
+    );
+}
+
+#[test]
+fn extracts_usage_from_split_streaming_events() {
+    let mut usage = AnthropicStreamUsage::default();
+    let mut buffer = Vec::new();
+
+    usage.observe_chunk(
+        br#"event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":"#,
+        &mut buffer,
+    );
+    usage.observe_chunk(
+        br#"25,"output_tokens":1}}}
+
+event: message_delta
+data: {"type":"message_delta","usage":{"output_tokens":15}}
+
+"#,
+        &mut buffer,
+    );
+
+    assert_eq!(
+        usage.finish(),
+        Some(AnthropicUsage {
+            input_tokens: Some(25),
+            output_tokens: Some(15),
+        })
+    );
 }
