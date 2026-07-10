@@ -121,11 +121,32 @@ fn extracts_usage_from_non_streaming_response_body() {
     assert_eq!(
         usage,
         AnthropicUsage {
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
             input_tokens: Some(25),
             output_tokens: Some(15),
         }
     );
     assert_eq!(usage.total_tokens(), 40);
+}
+
+#[test]
+fn extracts_cached_usage_from_non_streaming_response_body() {
+    let usage = anthropic_usage_from_json_slice(
+		br#"{"id":"msg_123","usage":{"input_tokens":25,"cache_creation_input_tokens":100,"cache_read_input_tokens":75,"output_tokens":15}}"#,
+	)
+	.expect("usage should parse");
+
+    assert_eq!(
+        usage,
+        AnthropicUsage {
+            cache_creation_input_tokens: Some(100),
+            cache_read_input_tokens: Some(75),
+            input_tokens: Some(25),
+            output_tokens: Some(15),
+        }
+    );
+    assert_eq!(usage.total_tokens(), 215);
 }
 
 #[test]
@@ -152,10 +173,42 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
     assert_eq!(
         usage.finish(),
         Some(AnthropicUsage {
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
             input_tokens: Some(25),
             output_tokens: Some(15),
         })
     );
+}
+
+#[test]
+fn extracts_cached_usage_from_streaming_events() {
+    let mut usage = AnthropicStreamUsage::default();
+    let mut buffer = Vec::new();
+
+    usage.observe_chunk(
+		br#"event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":25,"cache_creation_input_tokens":100,"cache_read_input_tokens":75,"output_tokens":1}}}
+
+event: message_delta
+data: {"type":"message_delta","usage":{"output_tokens":15}}
+
+"#,
+		&mut buffer,
+	);
+
+    let usage = usage.finish().expect("usage should parse");
+
+    assert_eq!(
+        usage,
+        AnthropicUsage {
+            cache_creation_input_tokens: Some(100),
+            cache_read_input_tokens: Some(75),
+            input_tokens: Some(25),
+            output_tokens: Some(15),
+        }
+    );
+    assert_eq!(usage.total_tokens(), 215);
 }
 
 #[test]
@@ -181,6 +234,8 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
     assert_eq!(
         usage.finish(),
         Some(AnthropicUsage {
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: None,
             input_tokens: Some(25),
             output_tokens: Some(15),
         })

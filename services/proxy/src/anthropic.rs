@@ -188,6 +188,10 @@ pub(crate) fn anthropic_usage_from_json_slice(body: &[u8]) -> Option<AnthropicUs
 
 fn anthropic_usage_from_json_value(value: &Value) -> Option<AnthropicUsage> {
     Some(AnthropicUsage {
+        cache_creation_input_tokens: value
+            .get("cache_creation_input_tokens")
+            .and_then(Value::as_u64),
+        cache_read_input_tokens: value.get("cache_read_input_tokens").and_then(Value::as_u64),
         input_tokens: value.get("input_tokens").and_then(Value::as_u64),
         output_tokens: value.get("output_tokens").and_then(Value::as_u64),
     })
@@ -275,17 +279,25 @@ fn usage_recording_stream(
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AnthropicUsage {
+    pub cache_creation_input_tokens: Option<u64>,
+    pub cache_read_input_tokens: Option<u64>,
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
 }
 
 impl AnthropicUsage {
     pub(crate) fn total_tokens(&self) -> u64 {
-        self.input_tokens.unwrap_or(0) + self.output_tokens.unwrap_or(0)
+        self.cache_creation_input_tokens.unwrap_or(0)
+            + self.cache_read_input_tokens.unwrap_or(0)
+            + self.input_tokens.unwrap_or(0)
+            + self.output_tokens.unwrap_or(0)
     }
 
     fn has_usage(&self) -> bool {
-        self.input_tokens.is_some() || self.output_tokens.is_some()
+        self.cache_creation_input_tokens.is_some()
+            || self.cache_read_input_tokens.is_some()
+            || self.input_tokens.is_some()
+            || self.output_tokens.is_some()
     }
 }
 
@@ -324,6 +336,12 @@ impl AnthropicStreamUsage {
                     .and_then(|message| message.get("usage"))
                     .and_then(anthropic_usage_from_json_value)
                 {
+                    if usage.cache_creation_input_tokens.is_some() {
+                        self.usage.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+                    }
+                    if usage.cache_read_input_tokens.is_some() {
+                        self.usage.cache_read_input_tokens = usage.cache_read_input_tokens;
+                    }
                     if usage.input_tokens.is_some() {
                         self.usage.input_tokens = usage.input_tokens;
                     }
@@ -333,10 +351,19 @@ impl AnthropicStreamUsage {
                 }
             }
             Some("message_delta") => {
-                if let Some(usage) = value.get("usage").and_then(anthropic_usage_from_json_value)
-                    && usage.output_tokens.is_some()
-                {
-                    self.usage.output_tokens = usage.output_tokens;
+                if let Some(usage) = value.get("usage").and_then(anthropic_usage_from_json_value) {
+                    if usage.cache_creation_input_tokens.is_some() {
+                        self.usage.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+                    }
+                    if usage.cache_read_input_tokens.is_some() {
+                        self.usage.cache_read_input_tokens = usage.cache_read_input_tokens;
+                    }
+                    if usage.input_tokens.is_some() {
+                        self.usage.input_tokens = usage.input_tokens;
+                    }
+                    if usage.output_tokens.is_some() {
+                        self.usage.output_tokens = usage.output_tokens;
+                    }
                 }
             }
             _ => {}
