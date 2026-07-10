@@ -8,6 +8,7 @@ use aws_sdk_secretsmanager::Client as SecretsManagerClient;
 use tokio::net::TcpListener;
 use tracing::info;
 
+use crate::anthropic::load_anthropic_proxy;
 use crate::api_key::load_api_key_hasher;
 use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
@@ -20,6 +21,7 @@ use crate::streams::ActiveStreamTracker;
 use crate::telemetry::init_tracing;
 use crate::token_usage::TokenUsageChecker;
 
+pub mod anthropic;
 pub mod api_key;
 mod app;
 pub mod auth;
@@ -33,6 +35,8 @@ pub mod streams;
 mod telemetry;
 pub mod token_usage;
 
+#[cfg(test)]
+mod anthropic_test;
 #[cfg(test)]
 mod api_key_test;
 #[cfg(test)]
@@ -56,17 +60,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = ProxyConfig::from_env()?;
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let secrets_client = SecretsManagerClient::new(&aws_config);
     let engineer_auth = Arc::new(EngineerAuth::new(
         DynamoDbClient::new(&aws_config),
         config.engineers_table_name.clone(),
         config.engineers_api_key_index_name.clone(),
     ));
     let api_key_hasher = Arc::new(
-        load_api_key_hasher(
-            &SecretsManagerClient::new(&aws_config),
-            &config.proxy_api_key_hash_secret_arn,
-        )
-        .await?,
+        load_api_key_hasher(&secrets_client, &config.proxy_api_key_hash_secret_arn).await?,
+    );
+    let anthropic_proxy = Arc::new(
+        load_anthropic_proxy(&secrets_client, &config.anthropic_api_key_secret_arn).await?,
     );
     let authenticator = Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth));
     let rate_limiter = Arc::new(RateLimiter::new(
@@ -80,8 +84,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.token_usage_table_name.clone(),
     ));
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
-    // TODO: Wire this tracker into the streaming proxy route so ActiveStreams reflects
-    // live streams and MAX_ACTIVE_STREAMS is enforced for real proxy traffic.
     start_active_stream_metric_publisher(
         Arc::clone(&stream_tracker),
         config.metric_interval,
@@ -96,8 +98,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(
         listener,
         app(AppState::new(
+            anthropic_proxy,
             authenticator,
             rate_limiter,
+            stream_tracker,
             token_usage_checker,
         )),
     )

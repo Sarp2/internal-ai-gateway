@@ -33,6 +33,8 @@ import {
 	ApplicationProtocol,
 	type ApplicationTargetGroup,
 	HttpCodeTarget,
+	ListenerAction,
+	ListenerCertificate,
 } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
@@ -55,9 +57,12 @@ const proxyServiceName = 'internal-ai-gateway-proxy';
 const proxyAccessLogPrefix = 'alb';
 
 type EcsStackProps = StackProps & {
+	anthropicApiKeySecret: Secret;
 	engineersApiKeyIndexName: string;
 	engineersTable: Table;
 	proxyApiKeyHashSecret: Secret;
+	proxyCertificateArn?: string;
+	proxyDomainName?: string;
 	rateLimitTable: Table;
 	tokenUsageTable: Table;
 	vpc: Vpc;
@@ -136,6 +141,7 @@ export class EcsStack extends Stack {
 			}),
 		);
 
+		props.anthropicApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
 		props.proxyApiKeyHashSecret.grantRead(this.proxyTaskDefinition.taskRole);
 		this.proxyTaskDefinition.addToTaskRolePolicy(
 			new PolicyStatement({
@@ -175,6 +181,7 @@ export class EcsStack extends Stack {
 			essential: true,
 			environment: {
 				ACTIVE_STREAM_METRIC_INTERVAL_SECONDS: '15',
+				ANTHROPIC_API_KEY_SECRET_ARN: props.anthropicApiKeySecret.secretArn,
 				ENGINEERS_API_KEY_INDEX_NAME: props.engineersApiKeyIndexName,
 				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
@@ -226,7 +233,7 @@ export class EcsStack extends Stack {
 			'ProxyLoadBalancerSecurityGroup',
 			{
 				vpc: props.vpc as IVpc,
-				description: 'Allows public HTTP traffic to reach the proxy load balancer.',
+				description: 'Allows public web traffic to reach the proxy load balancer.',
 				allowAllOutbound: true,
 			},
 		);
@@ -236,6 +243,13 @@ export class EcsStack extends Stack {
 			Port.tcp(80),
 			'Allow public HTTP traffic.',
 		);
+		if (props.proxyCertificateArn) {
+			this.proxyLoadBalancerSecurityGroup.addIngressRule(
+				Peer.anyIpv4(),
+				Port.tcp(443),
+				'Allow public HTTPS traffic.',
+			);
+		}
 
 		this.proxyServiceSecurityGroup.addIngressRule(
 			this.proxyLoadBalancerSecurityGroup,
@@ -263,11 +277,31 @@ export class EcsStack extends Stack {
 		this.proxyLoadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 		this.addAccessLogBucketPolicyDependency();
 
-		const proxyListener = this.proxyLoadBalancer.addListener('ProxyHttpListener', {
-			port: 80,
-			protocol: ApplicationProtocol.HTTP,
-			open: false,
-		});
+		const proxyListener = props.proxyCertificateArn
+			? this.proxyLoadBalancer.addListener('ProxyHttpsListener', {
+					port: 443,
+					protocol: ApplicationProtocol.HTTPS,
+					certificates: [ListenerCertificate.fromArn(props.proxyCertificateArn)],
+					open: false,
+				})
+			: this.proxyLoadBalancer.addListener('ProxyHttpListener', {
+					port: 80,
+					protocol: ApplicationProtocol.HTTP,
+					open: false,
+				});
+
+		if (props.proxyCertificateArn) {
+			this.proxyLoadBalancer.addListener('ProxyHttpRedirectListener', {
+				port: 80,
+				protocol: ApplicationProtocol.HTTP,
+				open: false,
+				defaultAction: ListenerAction.redirect({
+					port: '443',
+					protocol: ApplicationProtocol.HTTPS,
+					permanent: true,
+				}),
+			});
+		}
 
 		this.proxyTargetGroup = proxyListener.addTargets('ProxyTargets', {
 			port: proxyContainerPort,
@@ -325,7 +359,9 @@ export class EcsStack extends Stack {
 
 		new CfnOutput(this, 'ProxyHealthUrl', {
 			description: 'Health check URL for the proxy service.',
-			value: `http://${this.proxyLoadBalancer.loadBalancerDnsName}/health`,
+			value: props.proxyDomainName
+				? `https://${props.proxyDomainName}/health`
+				: `http://${this.proxyLoadBalancer.loadBalancerDnsName}/health`,
 		});
 
 		new CfnOutput(this, 'ProxyAccessLogBucketName', {

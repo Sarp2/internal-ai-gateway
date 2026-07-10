@@ -19,6 +19,10 @@ fn uses_defaults_when_env_values_are_missing() {
     assert_eq!(config.rate_limit_table_name, "rate-limits");
     assert_eq!(config.rate_limit_window, Duration::from_secs(60));
     assert_eq!(config.token_usage_table_name, "token-usage");
+    assert_eq!(
+        config.anthropic_api_key_secret_arn,
+        "arn:aws:secretsmanager:anthropic-api-key"
+    );
 }
 
 #[test]
@@ -34,6 +38,7 @@ fn parses_env_values() {
         "RATE_LIMIT_TABLE_NAME" => Some("custom-rate-limits".to_string()),
         "RATE_LIMIT_WINDOW_SECONDS" => Some("120".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("custom-token-usage".to_string()),
+        "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -51,6 +56,10 @@ fn parses_env_values() {
     assert_eq!(config.rate_limit_table_name, "custom-rate-limits");
     assert_eq!(config.rate_limit_window, Duration::from_secs(120));
     assert_eq!(config.token_usage_table_name, "custom-token-usage");
+    assert_eq!(
+        config.anthropic_api_key_secret_arn,
+        "arn:aws:secretsmanager:anthropic"
+    );
 }
 
 #[test]
@@ -63,6 +72,7 @@ fn falls_back_to_defaults_for_invalid_env_values() {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         _ => Some("invalid".to_string()),
     })
     .expect("config should parse");
@@ -88,6 +98,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -105,6 +116,7 @@ fn rejects_missing_proxy_api_key_hash_secret_arn() {
         "ENGINEERS_API_KEY_INDEX_NAME" => Some("ApiKeyIndex".to_string()),
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         _ => None,
     })
     .expect_err("config should fail");
@@ -124,6 +136,9 @@ fn test_value(name: &str) -> Option<String> {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "ANTHROPIC_API_KEY_SECRET_ARN" => {
+            Some("arn:aws:secretsmanager:anthropic-api-key".to_string())
+        }
         _ => None,
     }
 }

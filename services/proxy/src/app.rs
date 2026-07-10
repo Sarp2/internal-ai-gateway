@@ -4,32 +4,40 @@ use axum::body::Body;
 use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
 
+use crate::anthropic::{AnthropicProxy, messages};
 use crate::auth::RequestAuthenticator;
 use crate::health::health;
 use crate::rate_limit::RateLimiter;
+use crate::streams::ActiveStreamTracker;
 use crate::token_usage::TokenUsageChecker;
 
 #[derive(Clone)]
 pub struct AppState {
-    _authenticator: Arc<RequestAuthenticator>,
-    _rate_limiter: Arc<RateLimiter>,
-    _token_usage_checker: Arc<TokenUsageChecker>,
+    pub(crate) anthropic_proxy: Arc<AnthropicProxy>,
+    pub(crate) authenticator: Arc<RequestAuthenticator>,
+    pub(crate) rate_limiter: Arc<RateLimiter>,
+    pub(crate) stream_tracker: Arc<ActiveStreamTracker>,
+    pub(crate) token_usage_checker: Arc<TokenUsageChecker>,
 }
 
 impl AppState {
     pub fn new(
+        anthropic_proxy: Arc<AnthropicProxy>,
         authenticator: Arc<RequestAuthenticator>,
         rate_limiter: Arc<RateLimiter>,
+        stream_tracker: Arc<ActiveStreamTracker>,
         token_usage_checker: Arc<TokenUsageChecker>,
     ) -> Self {
         Self {
-            _authenticator: authenticator,
-            _rate_limiter: rate_limiter,
-            _token_usage_checker: token_usage_checker,
+            anthropic_proxy,
+            authenticator,
+            rate_limiter,
+            stream_tracker,
+            token_usage_checker,
         }
     }
 }
@@ -37,6 +45,7 @@ impl AppState {
 pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/v1/anthropic/messages", post(messages))
         .fallback(not_found)
         .with_state(state)
 }

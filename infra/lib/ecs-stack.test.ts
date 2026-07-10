@@ -68,6 +68,10 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: '15',
 					},
 					{
+						Name: 'ANTHROPIC_API_KEY_SECRET_ARN',
+						Value: Match.anyValue(),
+					},
+					{
 						Name: 'ENGINEERS_API_KEY_INDEX_NAME',
 						Value: 'ApiKeyIndex',
 					},
@@ -249,6 +253,43 @@ test('defines an HTTP listener for the proxy load balancer', () => {
 	});
 });
 
+test('defines HTTPS listener when a proxy certificate is configured', () => {
+	const template = synthesizeTemplate({
+		proxyCertificateArn: 'arn:aws:acm:eu-north-1:111122223333:certificate/test-certificate',
+	});
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+		Port: 443,
+		Protocol: 'HTTPS',
+		Certificates: [
+			{
+				CertificateArn: 'arn:aws:acm:eu-north-1:111122223333:certificate/test-certificate',
+			},
+		],
+	});
+});
+
+test('redirects HTTP to HTTPS when a proxy certificate is configured', () => {
+	const template = synthesizeTemplate({
+		proxyCertificateArn: 'arn:aws:acm:eu-north-1:111122223333:certificate/test-certificate',
+	});
+
+	template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+		Port: 80,
+		Protocol: 'HTTP',
+		DefaultActions: [
+			{
+				RedirectConfig: {
+					Port: '443',
+					Protocol: 'HTTPS',
+					StatusCode: 'HTTP_301',
+				},
+				Type: 'redirect',
+			},
+		],
+	});
+});
+
 test('routes load balancer traffic to the proxy container port', () => {
 	const template = synthesizeTemplate();
 
@@ -291,7 +332,7 @@ test('allows public HTTP traffic into the load balancer', () => {
 	const template = synthesizeTemplate();
 
 	template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-		GroupDescription: 'Allows public HTTP traffic to reach the proxy load balancer.',
+		GroupDescription: 'Allows public web traffic to reach the proxy load balancer.',
 		SecurityGroupIngress: [
 			{
 				CidrIp: '0.0.0.0/0',
@@ -300,6 +341,24 @@ test('allows public HTTP traffic into the load balancer', () => {
 				ToPort: 80,
 			},
 		],
+	});
+});
+
+test('allows public HTTPS traffic when a proxy certificate is configured', () => {
+	const template = synthesizeTemplate({
+		proxyCertificateArn: 'arn:aws:acm:eu-north-1:111122223333:certificate/test-certificate',
+	});
+
+	template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+		GroupDescription: 'Allows public web traffic to reach the proxy load balancer.',
+		SecurityGroupIngress: Match.arrayWith([
+			Match.objectLike({
+				CidrIp: '0.0.0.0/0',
+				FromPort: 443,
+				IpProtocol: 'tcp',
+				ToPort: 443,
+			}),
+		]),
 	});
 });
 
@@ -557,15 +616,32 @@ test('defines deploy outputs for proxy endpoints and access logs', () => {
 	});
 });
 
-function synthesizeTemplate(): Template {
+test('uses the configured proxy domain in the health URL output', () => {
+	const template = synthesizeTemplate({
+		proxyCertificateArn: 'arn:aws:acm:eu-north-1:111122223333:certificate/test-certificate',
+		proxyDomainName: 'api.example.com',
+	});
+
+	template.hasOutput('ProxyHealthUrl', {
+		Value: 'https://api.example.com/health',
+	});
+});
+
+function synthesizeTemplate(
+	props: { proxyCertificateArn?: string; proxyDomainName?: string } = {},
+): Template {
 	const app = new App();
 	const dynamoDbStack = new DynamoDbStack(app, 'TestDynamoDbStack');
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
 	const secretsStack = new Stack(app, 'TestSecretsStack');
+	const anthropicApiKeySecret = new Secret(secretsStack, 'AnthropicApiKeySecret');
 	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
+		anthropicApiKeySecret,
 		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: dynamoDbStack.engineersTable,
+		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
+		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		proxyApiKeyHashSecret,
 		rateLimitTable: dynamoDbStack.rateLimitTable,
 		tokenUsageTable: dynamoDbStack.tokenUsageTable,

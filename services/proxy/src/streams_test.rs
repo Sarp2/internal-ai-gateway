@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::streams::ActiveStreamTracker;
 
 #[test]
@@ -29,4 +31,18 @@ fn active_stream_tracker_rejects_streams_at_limit() {
 
     assert!(tracker.try_start_stream().is_none());
     assert_eq!(tracker.current(), 1);
+}
+
+#[test]
+fn owned_active_stream_guard_counts_active_streams() {
+    let tracker = Arc::new(ActiveStreamTracker::new(1));
+    let stream = tracker
+        .try_start_owned()
+        .expect("owned stream should start");
+
+    assert_eq!(tracker.current(), 1);
+    assert!(tracker.try_start_owned().is_none());
+
+    stream.finish();
+    assert_eq!(tracker.current(), 0);
 }
