@@ -66,7 +66,7 @@ impl EngineerAuth {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AuthenticatedEngineer {
     pub daily_token_limit: Option<u64>,
     pub enabled: bool,

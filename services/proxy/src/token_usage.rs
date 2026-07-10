@@ -80,7 +80,26 @@ impl TokenUsageChecker {
         engineer: &AuthenticatedEngineer,
         input_tokens: u64,
     ) -> Result<(), TokenUsageError> {
-        if input_tokens == 0 {
+        self.record_tokens_with_limit(engineer, input_tokens, true)
+            .await
+    }
+
+    pub async fn record_tokens(
+        &self,
+        engineer: &AuthenticatedEngineer,
+        token_count: u64,
+    ) -> Result<(), TokenUsageError> {
+        self.record_tokens_with_limit(engineer, token_count, false)
+            .await
+    }
+
+    async fn record_tokens_with_limit(
+        &self,
+        engineer: &AuthenticatedEngineer,
+        token_count: u64,
+        enforce_limit: bool,
+    ) -> Result<(), TokenUsageError> {
+        if token_count == 0 {
             return Ok(());
         }
 
@@ -91,8 +110,10 @@ impl TokenUsageChecker {
         let daily_update = self.usage_update(
             &engineer.user_id,
             &daily_usage_window(now),
-            input_tokens,
-            engineer.daily_token_limit,
+            token_count,
+            enforce_limit
+                .then_some(engineer.daily_token_limit)
+                .flatten(),
             token_usage_ttl_epoch_seconds(daily_window_start, DAILY_WINDOW_SECONDS),
             TokenUsageError::DailyLimitExceeded,
         )?;
@@ -100,8 +121,10 @@ impl TokenUsageChecker {
         let weekly_update = self.usage_update(
             &engineer.user_id,
             &weekly_usage_window(now),
-            input_tokens,
-            engineer.weekly_token_limit,
+            token_count,
+            enforce_limit
+                .then_some(engineer.weekly_token_limit)
+                .flatten(),
             token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS),
             TokenUsageError::WeeklyLimitExceeded,
         )?;
@@ -113,9 +136,10 @@ impl TokenUsageChecker {
             .send()
             .await
             .map_err(|source| {
-                if source
-                    .as_service_error()
-                    .is_some_and(|error| error.is_transaction_canceled_exception())
+                if enforce_limit
+                    && source
+                        .as_service_error()
+                        .is_some_and(|error| error.is_transaction_canceled_exception())
                 {
                     TokenUsageError::LimitExceededDuringInputRecording
                 } else {
@@ -163,7 +187,7 @@ impl TokenUsageChecker {
         &self,
         user_id: &str,
         usage_window: &str,
-        input_tokens: u64,
+        token_count: u64,
         token_limit: Option<u64>,
         ttl: u64,
         limit_error: TokenUsageError,
@@ -178,11 +202,11 @@ impl TokenUsageChecker {
             .update_expression("SET #ttl = :ttl ADD #token_count :tokens")
             .expression_attribute_names("#token_count", TOKEN_COUNT_ATTRIBUTE)
             .expression_attribute_names("#ttl", "ttl")
-            .expression_attribute_values(":tokens", AttributeValue::N(input_tokens.to_string()))
+            .expression_attribute_values(":tokens", AttributeValue::N(token_count.to_string()))
             .expression_attribute_values(":ttl", AttributeValue::N(ttl.to_string()));
 
         if let Some(limit) = token_limit {
-            let remaining_before_increment = limit.checked_sub(input_tokens).ok_or(limit_error)?;
+            let remaining_before_increment = limit.checked_sub(token_count).ok_or(limit_error)?;
             update = update
 				.condition_expression(
 					"attribute_not_exists(#token_count) OR #token_count <= :remaining_before_increment",
