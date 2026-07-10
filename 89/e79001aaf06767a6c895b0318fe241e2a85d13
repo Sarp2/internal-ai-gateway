@@ -1,0 +1,19 @@
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_5ff4ca2feeff0d 83-84,91-100,114-116,125-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "89e79001aaf06767a6c895b0318fe241e2a85d13",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
