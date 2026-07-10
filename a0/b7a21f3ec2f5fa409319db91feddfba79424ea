@@ -1,0 +1,29 @@
+services/proxy/src/anthropic_test.rs
+  s_c26b496cd2589a::t_20fb76dcc7bb90 5-6,116-128,133,138-142,149-158,163-167,169-172,178-187
+  s_c26b496cd2589a::t_19be159134f0ae 113-115,129-132,134-137,143-148,159-162,168,173-177,188
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_66a7f7d872707b 83-91,102,111,174,189,193
+services/proxy/src/engineer_auth.rs
+  s_c26b496cd2589a::t_c56fbea677caf7 69
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_768d590d6eec4f 166,170,181-183,185,187-189,195-196,274-277,280-282,290-293,295-297,345-347,352-354,360-362
+  s_c26b496cd2589a::t_7a3d9c535c5d45 8,10,17-18,21-22,26,29,159,164-165,197,201,208-210,215
+  s_c26b496cd2589a::t_8d5f803b158cb4 261-265,363-364
+  s_c26b496cd2589a::t_20fb76dcc7bb90 57-58,80,88-105,149-154,160-163,167-169,171-180,184,186,190-194,198-200,202-207,211-214,216-260,266-273,278-279,283-289,294,298-344,348-351,355-359,365-372,557,569-571,581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a0b7a21f3ec2f5fa409319db91feddfba79424ea",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
