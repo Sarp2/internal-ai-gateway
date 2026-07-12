@@ -14,6 +14,7 @@ use futures_util::{Stream, StreamExt};
 use reqwest::Client as HttpClient;
 use reqwest::redirect::Policy;
 use serde_json::{Map, Value, json};
+use tokio::sync::mpsc;
 use tracing::{error, warn};
 
 use crate::anthropic::{
@@ -21,6 +22,7 @@ use crate::anthropic::{
 };
 use crate::app::AppState;
 use crate::auth::AuthError;
+use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::rate_limit::RateLimitError;
 use crate::streams::OwnedActiveStreamGuard;
@@ -28,6 +30,9 @@ use crate::token_usage::{TokenUsageChecker, TokenUsageError};
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const MAX_REQUEST_BODY_BYTES: usize = 20 * 1024 * 1024;
+const STREAM_CHANNEL_CAPACITY: usize = 8;
+
+type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct OpenAiProxy {
@@ -55,6 +60,7 @@ impl OpenAiProxy {
         engineer: AuthenticatedEngineer,
         token_usage_checker: Arc<TokenUsageChecker>,
         stream_guard: OwnedActiveStreamGuard,
+        background_tasks: BackgroundTasks,
     ) -> Result<Response<Body>, OpenAiProxyError> {
         let (parts, body) = request.into_parts();
         let body = to_bytes(body, MAX_REQUEST_BODY_BYTES)
@@ -112,6 +118,7 @@ impl OpenAiProxy {
             token_usage_checker,
             engineer,
             stream_guard,
+            background_tasks,
         );
 
         response_builder
@@ -164,6 +171,7 @@ async fn handle_chat_completions(
             engineer,
             Arc::clone(&state.token_usage_checker),
             stream_guard,
+            state.background_tasks.clone(),
         )
         .await
         .map_err(OpenAiRouteError::Proxy)
@@ -280,37 +288,53 @@ async fn record_openai_usage(
 }
 
 fn usage_recording_stream(
-    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin,
+    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
     token_usage_checker: Arc<TokenUsageChecker>,
     engineer: AuthenticatedEngineer,
     stream_guard: OwnedActiveStreamGuard,
-) -> impl Stream<Item = Result<Bytes, Box<dyn Error + Send + Sync>>> {
-    stream::unfold(
-        (
-            provider_stream,
-            OpenAiStreamUsageRecorder::new(token_usage_checker, engineer),
-            Some(stream_guard),
-        ),
-        |(mut provider_stream, mut usage_recorder, stream_guard)| async move {
-            match provider_stream.next().await {
-                Some(Ok(chunk)) => {
+    background_tasks: BackgroundTasks,
+) -> impl Stream<Item = ProxyStreamItem> {
+    let (sender, receiver) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+    let engineer_id = engineer.user_id.clone();
+
+    background_tasks.spawn(async move {
+        let mut provider_stream = provider_stream;
+        let mut usage_recorder = OpenAiStreamUsageRecorder::new(token_usage_checker, engineer);
+        let mut downstream_connected = true;
+        let _stream_guard = stream_guard;
+
+        while let Some(provider_result) = provider_stream.next().await {
+            match provider_result {
+                Ok(chunk) => {
                     usage_recorder.observe_chunk(&chunk);
-                    Some((Ok(chunk), (provider_stream, usage_recorder, stream_guard)))
-                }
-                Some(Err(error)) => Some((
-                    Err(Box::new(error) as Box<dyn Error + Send + Sync>),
-                    (provider_stream, usage_recorder, stream_guard),
-                )),
-                None => {
-                    if let Err(error) = usage_recorder.record_observed_usage().await {
-                        warn!(%error, "failed to record OpenAI streaming token usage");
+
+                    if downstream_connected && sender.send(Ok(chunk)).await.is_err() {
+                        downstream_connected = false;
+                        warn!(%engineer_id, "OpenAI client disconnected; continuing provider drain");
                     }
-                    drop(stream_guard);
-                    None
+                }
+                Err(error) => {
+                    warn!(%engineer_id, %error, "OpenAI provider stream failed");
+
+                    if downstream_connected {
+                        let _ = sender
+                            .send(Err(Box::new(error) as Box<dyn Error + Send + Sync>))
+                            .await;
+                    }
+
+                    break;
                 }
             }
-        },
-    )
+        }
+
+        if let Err(error) = usage_recorder.record_observed_usage().await {
+            warn!(%engineer_id, %error, "failed to record OpenAI streaming token usage");
+        }
+    });
+
+    stream::unfold(receiver, |mut receiver| async move {
+        receiver.recv().await.map(|item| (item, receiver))
+    })
 }
 
 struct OpenAiStreamUsageRecorder {
@@ -670,4 +694,21 @@ pub(crate) fn forwards_request_header(name: &HeaderName, headers: &HeaderMap) ->
 #[cfg(test)]
 pub(crate) fn request_headers_recomputed_by_client() -> [HeaderName; 2] {
     [axum::http::header::HOST, axum::http::header::CONTENT_LENGTH]
+}
+
+#[cfg(test)]
+pub(crate) fn test_usage_recording_stream(
+    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
+    token_usage_checker: Arc<TokenUsageChecker>,
+    engineer: AuthenticatedEngineer,
+    stream_guard: OwnedActiveStreamGuard,
+    background_tasks: BackgroundTasks,
+) -> impl Stream<Item = ProxyStreamItem> {
+    usage_recording_stream(
+        provider_stream,
+        token_usage_checker,
+        engineer,
+        stream_guard,
+        background_tasks,
+    )
 }

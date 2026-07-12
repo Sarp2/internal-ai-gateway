@@ -1,11 +1,21 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use aws_sdk_dynamodb::config::BehaviorVersion;
+use axum::body::Bytes;
 use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONNECTION};
 use axum::http::{HeaderMap, HeaderName};
+use futures_util::{StreamExt, stream};
 use serde_json::Value;
 
+use crate::background_tasks::BackgroundTasks;
+use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai::{
     OpenAiStreamUsage, OpenAiUsage, forwards_request_header, openai_usage_from_json_slice,
-    prepare_request_body, request_headers_recomputed_by_client,
+    prepare_request_body, request_headers_recomputed_by_client, test_usage_recording_stream,
 };
+use crate::streams::ActiveStreamTracker;
+use crate::token_usage::TokenUsageChecker;
 
 #[test]
 fn forces_usage_in_streaming_requests_and_preserves_options() {
@@ -149,4 +159,52 @@ fn has_no_usage_when_stream_ends_before_final_usage_chunk() {
     );
 
     assert!(stream_usage.observed_usage().is_none());
+}
+
+#[tokio::test]
+async fn drains_provider_stream_after_downstream_disconnects() {
+    let consumed_chunks = Arc::new(AtomicUsize::new(0));
+    let provider_counter = Arc::clone(&consumed_chunks);
+    let provider_stream = stream::iter((0..20).map(move |index| {
+        provider_counter.fetch_add(1, Ordering::SeqCst);
+        Ok::<_, reqwest::Error>(Bytes::from(format!("data: chunk-{index}\n\n")))
+    }));
+    let active_streams = Arc::new(ActiveStreamTracker::new(1));
+    let stream_guard = active_streams
+        .try_start_owned()
+        .expect("stream slot should be available");
+    let background_tasks = BackgroundTasks::new();
+    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "token-usage",
+    ));
+    let engineer = AuthenticatedEngineer {
+        daily_token_limit: None,
+        enabled: true,
+        user_id: "engineer-1".to_string(),
+        weekly_token_limit: None,
+    };
+    let mut downstream = Box::pin(test_usage_recording_stream(
+        provider_stream,
+        token_usage_checker,
+        engineer,
+        stream_guard,
+        background_tasks.clone(),
+    ));
+
+    downstream
+        .next()
+        .await
+        .expect("first downstream chunk should arrive")
+        .expect("first downstream chunk should be valid");
+    drop(downstream);
+
+    background_tasks.shutdown().await;
+
+    assert_eq!(consumed_chunks.load(Ordering::SeqCst), 20);
+    assert_eq!(active_streams.current(), 0);
 }

@@ -12,6 +12,7 @@ use crate::anthropic::load_anthropic_proxy;
 use crate::api_key::load_api_key_hasher;
 use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
+use crate::background_tasks::BackgroundTasks;
 use crate::config::ProxyConfig;
 use crate::engineer_auth::EngineerAuth;
 use crate::metrics::start_active_stream_metric_publisher;
@@ -26,6 +27,7 @@ pub mod anthropic;
 pub mod api_key;
 mod app;
 pub mod auth;
+mod background_tasks;
 mod config;
 pub mod engineer_auth;
 mod health;
@@ -90,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.token_usage_table_name.clone(),
     ));
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
+    let background_tasks = BackgroundTasks::new();
     start_active_stream_metric_publisher(
         Arc::clone(&stream_tracker),
         config.metric_interval,
@@ -101,11 +104,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(%address, "proxy service listening");
 
-    axum::serve(
+    let server_result = axum::serve(
         listener,
         app(AppState::new(
             anthropic_proxy,
             authenticator,
+            background_tasks.clone(),
             openai_proxy,
             rate_limiter,
             stream_tracker,
@@ -113,7 +117,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )),
     )
     .with_graceful_shutdown(shutdown_signal())
-    .await?;
+    .await;
+
+    background_tasks.shutdown().await;
+
+    server_result?;
 
     Ok(())
 }

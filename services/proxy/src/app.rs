@@ -10,6 +10,7 @@ use serde_json::json;
 
 use crate::anthropic::{AnthropicProxy, messages};
 use crate::auth::RequestAuthenticator;
+use crate::background_tasks::BackgroundTasks;
 use crate::health::health;
 use crate::openai::{OpenAiProxy, chat_completions};
 use crate::rate_limit::RateLimiter;
@@ -20,6 +21,7 @@ use crate::token_usage::TokenUsageChecker;
 pub struct AppState {
     pub(crate) anthropic_proxy: Arc<AnthropicProxy>,
     pub(crate) authenticator: Arc<RequestAuthenticator>,
+    pub(crate) background_tasks: BackgroundTasks,
     pub(crate) openai_proxy: Arc<OpenAiProxy>,
     pub(crate) rate_limiter: Arc<RateLimiter>,
     pub(crate) stream_tracker: Arc<ActiveStreamTracker>,
@@ -30,6 +32,7 @@ impl AppState {
     pub fn new(
         anthropic_proxy: Arc<AnthropicProxy>,
         authenticator: Arc<RequestAuthenticator>,
+        background_tasks: BackgroundTasks,
         openai_proxy: Arc<OpenAiProxy>,
         rate_limiter: Arc<RateLimiter>,
         stream_tracker: Arc<ActiveStreamTracker>,
@@ -38,6 +41,7 @@ impl AppState {
         Self {
             anthropic_proxy,
             authenticator,
+            background_tasks,
             openai_proxy,
             rate_limiter,
             stream_tracker,
