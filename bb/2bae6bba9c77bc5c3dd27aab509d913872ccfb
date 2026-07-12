@@ -1,0 +1,49 @@
+infra/bin/app.ts
+  s_c26b496cd2589a::t_dd93d6ca873ac7 22
+services/proxy/src/app_test.rs
+  s_c26b496cd2589a::t_21c5a0d9e6edf1 13,95
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_dd93d6ca873ac7 63,146,191
+  s_c26b496cd2589a::t_0fea09e408b018 148
+services/proxy/src/openai_test.rs
+  s_c26b496cd2589a::t_bb0a9ce7410941 25-26,29
+  s_c26b496cd2589a::t_17b761f8ae5e49 34-36,38-41,89-91
+  s_c26b496cd2589a::t_3e79b079895a08 3
+  s_c26b496cd2589a::t_571c718cabfd40 1-2,4-24,27-28,30-33,37,42-88,92-151
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_21c5a0d9e6edf1 87-89,642,648
+  s_c26b496cd2589a::t_272851bc936384 86
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_dd93d6ca873ac7 18,33,53-54,109
+  s_c26b496cd2589a::t_17b761f8ae5e49 79-80
+services/proxy/src/openai.rs
+  s_c26b496cd2589a::t_0090c4cb20ce14 1-8,10-62,64-81,86-98,101-172,175-176,180,190,196-197,199-236,245-390,392-397,399-497,502-507,512-519,524,529-582,607-626,630-636,644-669,671
+  s_c26b496cd2589a::t_17b761f8ae5e49 83-84,99-100,173-174,237-244,498-501,508-511,520-523,525-528,583-606,627-629,637-643
+  s_c26b496cd2589a::t_7c750347a5b9bd 670
+  s_c26b496cd2589a::t_8916a612120754 63,82,85
+  s_c26b496cd2589a::t_50493a345ee998 9,391,398
+  s_c26b496cd2589a::t_bb0a9ce7410941 177-179,181-189,191-195,198
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_dd93d6ca873ac7 20,62-65
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_17b761f8ae5e49 154
+  s_c26b496cd2589a::t_21c5a0d9e6edf1 26-29,46,68-71,85,112,131
+services/proxy/src/app.rs
+  s_c26b496cd2589a::t_dd93d6ca873ac7 14,23,33,41,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "bb2bae6bba9c77bc5c3dd27aab509d913872ccfb",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
