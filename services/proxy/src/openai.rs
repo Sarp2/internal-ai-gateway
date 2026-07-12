@@ -6,7 +6,7 @@ use std::time::Duration;
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
 use axum::body::{Body, Bytes, to_bytes};
 use axum::extract::State;
-use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderName, Request, Response, StatusCode};
 use axum::response::IntoResponse;
 use futures_util::stream;
@@ -203,7 +203,9 @@ fn should_forward_openai_request_header(
     name: &HeaderName,
     connection_headers: &ConnectionHeaderNames,
 ) -> bool {
-    should_forward_request_header(name, connection_headers) && name != AUTHORIZATION
+    should_forward_request_header(name, connection_headers)
+        && name != AUTHORIZATION
+        && name != ACCEPT_ENCODING
 }
 
 fn is_event_stream_response(headers: &HeaderMap) -> bool {

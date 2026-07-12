@@ -1,4 +1,4 @@
-use axum::http::header::{AUTHORIZATION, CONNECTION};
+use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONNECTION};
 use axum::http::{HeaderMap, HeaderName};
 use serde_json::Value;
 
@@ -50,6 +50,7 @@ fn strips_gateway_and_provider_credentials_from_forwarded_headers() {
         &headers
     ));
     assert!(!forwards_request_header(&AUTHORIZATION, &headers));
+    assert!(!forwards_request_header(&ACCEPT_ENCODING, &headers));
 
     for header in request_headers_recomputed_by_client() {
         assert!(!forwards_request_header(&header, &headers));
