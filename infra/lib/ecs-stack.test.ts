@@ -84,6 +84,10 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: '200',
 					},
 					{
+						Name: 'OPENAI_API_KEY_SECRET_ARN',
+						Value: Match.anyValue(),
+					},
+					{
 						Name: 'PORT',
 						Value: '8080',
 					},
@@ -635,11 +639,13 @@ function synthesizeTemplate(
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
 	const secretsStack = new Stack(app, 'TestSecretsStack');
 	const anthropicApiKeySecret = new Secret(secretsStack, 'AnthropicApiKeySecret');
+	const openAiApiKeySecret = new Secret(secretsStack, 'OpenAiApiKeySecret');
 	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
 		anthropicApiKeySecret,
 		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: dynamoDbStack.engineersTable,
+		openAiApiKeySecret,
 		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		proxyApiKeyHashSecret,

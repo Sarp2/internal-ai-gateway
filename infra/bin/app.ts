@@ -19,6 +19,7 @@ new EcsStack(app, 'InternalAiGatewayEcsStack', {
 	anthropicApiKeySecret: secretsStack.anthropicApiKeySecret,
 	engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 	engineersTable: dynamoDbStack.engineersTable,
+	openAiApiKeySecret: secretsStack.openAiApiKeySecret,
 	proxyApiKeyHashSecret: secretsStack.proxyApiKeyHashSecret,
 	...(proxyCertificateArn ? { proxyCertificateArn } : {}),
 	...(proxyDomainName ? { proxyDomainName } : {}),

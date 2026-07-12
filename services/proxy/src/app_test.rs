@@ -10,6 +10,7 @@ use crate::api_key::ApiKeyHasher;
 use crate::app::{AppState, app};
 use crate::auth::RequestAuthenticator;
 use crate::engineer_auth::EngineerAuth;
+use crate::openai;
 use crate::rate_limit::RateLimiter;
 use crate::streams::ActiveStreamTracker;
 use crate::token_usage::TokenUsageChecker;
@@ -91,6 +92,7 @@ fn test_app() -> axum::Router {
     app(AppState::new(
         Arc::new(anthropic::test_proxy("test-anthropic-api-key")),
         Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth)),
+        Arc::new(openai::test_proxy("test-openai-api-key")),
         rate_limiter,
         Arc::new(ActiveStreamTracker::new(200)),
         token_usage_checker,

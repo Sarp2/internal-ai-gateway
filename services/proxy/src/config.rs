@@ -17,6 +17,7 @@ pub struct ProxyConfig {
     pub port: u16,
     pub max_active_streams: usize,
     pub metric_interval: Duration,
+    pub openai_api_key_secret_arn: String,
     pub proxy_api_key_hash_secret_arn: String,
     pub rate_limit_requests_per_window: u64,
     pub rate_limit_table_name: String,
@@ -58,6 +59,10 @@ impl ProxyConfig {
                 )
                 .max(1),
             ),
+            openai_api_key_secret_arn: required_value(
+                read_value("OPENAI_API_KEY_SECRET_ARN"),
+                "OPENAI_API_KEY_SECRET_ARN",
+            )?,
             proxy_api_key_hash_secret_arn: required_value(
                 read_value("PROXY_API_KEY_HASH_SECRET_ARN"),
                 "PROXY_API_KEY_HASH_SECRET_ARN",

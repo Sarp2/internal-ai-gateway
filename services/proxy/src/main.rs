@@ -15,6 +15,7 @@ use crate::auth::RequestAuthenticator;
 use crate::config::ProxyConfig;
 use crate::engineer_auth::EngineerAuth;
 use crate::metrics::start_active_stream_metric_publisher;
+use crate::openai::load_openai_proxy;
 use crate::rate_limit::RateLimiter;
 use crate::shutdown::shutdown_signal;
 use crate::streams::ActiveStreamTracker;
@@ -29,6 +30,7 @@ mod config;
 pub mod engineer_auth;
 mod health;
 mod metrics;
+pub mod openai;
 pub mod rate_limit;
 mod shutdown;
 pub mod streams;
@@ -47,6 +49,8 @@ mod auth_test;
 mod config_test;
 #[cfg(test)]
 mod engineer_auth_test;
+#[cfg(test)]
+mod openai_test;
 #[cfg(test)]
 mod rate_limit_test;
 #[cfg(test)]
@@ -72,6 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let anthropic_proxy = Arc::new(
         load_anthropic_proxy(&secrets_client, &config.anthropic_api_key_secret_arn).await?,
     );
+    let openai_proxy =
+        Arc::new(load_openai_proxy(&secrets_client, &config.openai_api_key_secret_arn).await?);
     let authenticator = Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth));
     let rate_limiter = Arc::new(RateLimiter::new(
         DynamoDbClient::new(&aws_config),
@@ -100,6 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app(AppState::new(
             anthropic_proxy,
             authenticator,
+            openai_proxy,
             rate_limiter,
             stream_tracker,
             token_usage_checker,

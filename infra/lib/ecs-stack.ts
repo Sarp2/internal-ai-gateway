@@ -60,6 +60,7 @@ type EcsStackProps = StackProps & {
 	anthropicApiKeySecret: Secret;
 	engineersApiKeyIndexName: string;
 	engineersTable: Table;
+	openAiApiKeySecret: Secret;
 	proxyApiKeyHashSecret: Secret;
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
@@ -142,7 +143,9 @@ export class EcsStack extends Stack {
 		);
 
 		props.anthropicApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
+		props.openAiApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
 		props.proxyApiKeyHashSecret.grantRead(this.proxyTaskDefinition.taskRole);
+
 		this.proxyTaskDefinition.addToTaskRolePolicy(
 			new PolicyStatement({
 				actions: ['dynamodb:Query'],
@@ -185,6 +188,7 @@ export class EcsStack extends Stack {
 				ENGINEERS_API_KEY_INDEX_NAME: props.engineersApiKeyIndexName,
 				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
+				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
 				PORT: String(proxyContainerPort),
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
