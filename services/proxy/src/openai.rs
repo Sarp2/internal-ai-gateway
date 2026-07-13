@@ -26,6 +26,7 @@ use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai_request::{OpenAiRequestTransformError, prepare_openai_request};
 use crate::rate_limit::RateLimitError;
+use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
 use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
@@ -309,10 +310,7 @@ impl OpenAiStreamUsageRecorder {
     fn observe_chunk(&mut self, chunk: &[u8]) {
         self.buffered_event.extend_from_slice(chunk);
 
-        while let Some(event_end) = find_sse_event_end(&self.buffered_event) {
-            let event = self.buffered_event.drain(..event_end).collect::<Vec<_>>();
-            trim_sse_event_separator(&mut self.buffered_event);
-
+        while let Some(event) = take_next_event(&mut self.buffered_event) {
             if let Some(usage) = usage_from_sse_event(&event) {
                 self.usage = Some(usage);
             }
@@ -380,10 +378,7 @@ impl OpenAiStreamUsage {
     pub(crate) fn observe_chunk(&mut self, chunk: &[u8]) {
         self.buffered_event.extend_from_slice(chunk);
 
-        while let Some(event_end) = find_sse_event_end(&self.buffered_event) {
-            let event = self.buffered_event.drain(..event_end).collect::<Vec<_>>();
-            trim_sse_event_separator(&mut self.buffered_event);
-
+        while let Some(event) = take_next_event(&mut self.buffered_event) {
             if let Some(usage) = usage_from_sse_event(&event) {
                 self.usage = Some(usage);
             }
@@ -404,32 +399,6 @@ fn usage_from_sse_event(event: &[u8]) -> Option<OpenAiUsage> {
 
     let value = serde_json::from_slice::<Value>(&data).ok()?;
     openai_usage_from_json_value(value.get("usage")?)
-}
-
-fn find_sse_event_end(buffer: &[u8]) -> Option<usize> {
-    buffer
-        .windows(2)
-        .position(|window| window == b"\n\n")
-        .or_else(|| buffer.windows(4).position(|window| window == b"\r\n\r\n"))
-}
-
-fn trim_sse_event_separator(buffer: &mut Vec<u8>) {
-    if buffer.starts_with(b"\r\n\r\n") {
-        buffer.drain(..4);
-    } else if buffer.starts_with(b"\n\n") {
-        buffer.drain(..2);
-    }
-}
-
-fn sse_event_data(event: &[u8]) -> Option<Vec<u8>> {
-    let event_text = String::from_utf8_lossy(event);
-    let data_lines = event_text
-        .lines()
-        .filter_map(|line| line.strip_prefix("data:"))
-        .map(str::trim_start)
-        .collect::<Vec<_>>();
-
-    (!data_lines.is_empty()).then(|| data_lines.join("\n").into_bytes())
 }
 
 pub async fn load_openai_proxy(

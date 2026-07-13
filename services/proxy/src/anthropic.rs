@@ -25,6 +25,7 @@ use crate::app::AppState;
 use crate::auth::AuthError;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::rate_limit::RateLimitError;
+use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
 use crate::token_usage::{TokenUsageChecker, TokenUsageError};
 
@@ -346,9 +347,7 @@ impl AnthropicStreamUsage {
     pub(crate) fn observe_chunk(&mut self, chunk: &[u8], buffered_event: &mut Vec<u8>) {
         buffered_event.extend_from_slice(chunk);
 
-        while let Some(event_end) = find_sse_event_end(buffered_event) {
-            let event = buffered_event.drain(..event_end).collect::<Vec<_>>();
-            trim_sse_event_separator(buffered_event);
+        while let Some(event) = take_next_event(buffered_event) {
             self.observe_event(&event);
         }
     }
@@ -405,32 +404,6 @@ impl AnthropicStreamUsage {
             _ => {}
         }
     }
-}
-
-fn find_sse_event_end(buffer: &[u8]) -> Option<usize> {
-    buffer
-        .windows(2)
-        .position(|window| window == b"\n\n")
-        .or_else(|| buffer.windows(4).position(|window| window == b"\r\n\r\n"))
-}
-
-fn trim_sse_event_separator(buffer: &mut Vec<u8>) {
-    if buffer.starts_with(b"\r\n\r\n") {
-        buffer.drain(..4);
-    } else if buffer.starts_with(b"\n\n") {
-        buffer.drain(..2);
-    }
-}
-
-fn sse_event_data(event: &[u8]) -> Option<Vec<u8>> {
-    let event_text = String::from_utf8_lossy(event);
-    let data_lines = event_text
-        .lines()
-        .filter_map(|line| line.strip_prefix("data:"))
-        .map(str::trim_start)
-        .collect::<Vec<_>>();
-
-    (!data_lines.is_empty()).then(|| data_lines.join("\n").into_bytes())
 }
 
 fn copy_response_headers(provider_headers: &HeaderMap, response_headers: Option<&mut HeaderMap>) {

@@ -36,6 +36,7 @@ pub mod openai;
 mod openai_request;
 pub mod rate_limit;
 mod shutdown;
+mod sse;
 pub mod streams;
 mod telemetry;
 mod token_accounting;
@@ -60,6 +61,8 @@ mod openai_request_test;
 mod openai_test;
 #[cfg(test)]
 mod rate_limit_test;
+#[cfg(test)]
+mod sse_test;
 #[cfg(test)]
 mod streams_test;
 #[cfg(test)]
