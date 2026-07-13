@@ -167,7 +167,15 @@ fn streams_requests_larger_than_the_old_twenty_mebibyte_limit() {
 }
 
 #[test]
-fn rejects_excessively_large_json_keys() {
+fn accepts_json_keys_at_the_size_limit() {
+    let key = "a".repeat(8 * 1024);
+    let request = format!(r#"{{"{key}":true}}"#);
+
+    transform_slice(request.as_bytes()).expect("key at the size limit should be accepted");
+}
+
+#[test]
+fn rejects_json_keys_above_the_size_limit() {
     let key = "a".repeat(8 * 1024 + 1);
     let request = format!(r#"{{"{key}":true}}"#);
 

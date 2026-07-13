@@ -540,6 +540,16 @@ impl<R> JsonKeyLimitReader<R> {
     fn inspect(&mut self, bytes: &[u8]) -> io::Result<()> {
         for byte in bytes {
             if self.in_string {
+                if self.escaped {
+                    self.escaped = false;
+                } else if *byte == b'\\' {
+                    self.escaped = true;
+                } else if *byte == b'"' {
+                    self.in_string = false;
+                    self.in_key = false;
+                    continue;
+                }
+
                 if self.in_key {
                     self.key_bytes += 1;
                     if self.key_bytes > MAX_JSON_KEY_BYTES {
@@ -548,15 +558,6 @@ impl<R> JsonKeyLimitReader<R> {
                             "JSON object key exceeds its size limit",
                         ));
                     }
-                }
-
-                if self.escaped {
-                    self.escaped = false;
-                } else if *byte == b'\\' {
-                    self.escaped = true;
-                } else if *byte == b'"' {
-                    self.in_string = false;
-                    self.in_key = false;
                 }
                 continue;
             }
