@@ -1654,6 +1654,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-secretsmanager",
  "axum",
+ "fastrand",
  "futures-util",
  "hex",
  "hmac 0.12.1",

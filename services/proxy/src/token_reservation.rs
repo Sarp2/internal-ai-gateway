@@ -2,9 +2,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+use std::time::Duration;
 
 use aws_sdk_dynamodb::Client as DynamoDbClient;
-use aws_sdk_dynamodb::types::{AttributeValue, Put, TransactWriteItem, Update};
+use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
+use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, Put, TransactWriteItem, Update};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::engineer_auth::AuthenticatedEngineer;
@@ -17,6 +20,8 @@ use crate::token_usage::{
 const CONSUMED_TOKENS_ATTRIBUTE: &str = "consumed_tokens";
 const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const RECORD_TYPE_ATTRIBUTE: &str = "record_type";
+const RESERVATION_RETRY_BASE_DELAY_MILLISECONDS: u64 = 25;
+const RESERVATION_TRANSACTION_ATTEMPTS: usize = 4;
 const REQUEST_ID_ATTRIBUTE: &str = "request_id";
 const RESERVED_TOKENS_ATTRIBUTE: &str = "reserved_tokens";
 const RESERVATION_RECORD_TYPE: &str = "token_reservation";
@@ -98,26 +103,55 @@ impl TokenReservationManager {
             weekly_window: &weekly_window,
         })?;
 
-        self.dynamodb_client
-            .transact_write_items()
-            .client_request_token(&reservation_id)
-            .transact_items(TransactWriteItem::builder().update(daily_update).build())
-            .transact_items(TransactWriteItem::builder().update(weekly_update).build())
-            .transact_items(TransactWriteItem::builder().put(reservation_put).build())
-            .send()
-            .await
-            .map_err(|source| {
-                if source
-                    .as_service_error()
-                    .is_some_and(|error| error.is_transaction_canceled_exception())
-                {
-                    TokenReservationError::LimitExceeded
-                } else {
-                    TokenReservationError::WriteFailed {
-                        source: Box::new(source),
+        for attempt in 0..RESERVATION_TRANSACTION_ATTEMPTS {
+            let result = self
+                .dynamodb_client
+                .transact_write_items()
+                .client_request_token(&reservation_id)
+                .transact_items(
+                    TransactWriteItem::builder()
+                        .update(daily_update.clone())
+                        .build(),
+                )
+                .transact_items(
+                    TransactWriteItem::builder()
+                        .update(weekly_update.clone())
+                        .build(),
+                )
+                .transact_items(
+                    TransactWriteItem::builder()
+                        .put(reservation_put.clone())
+                        .build(),
+                )
+                .send()
+                .await;
+
+            match result {
+                Ok(_) => break,
+                Err(source) => {
+                    let cancellation = source
+                        .as_service_error()
+                        .map(classify_reservation_error)
+                        .unwrap_or(ReservationFailure::WriteFailed);
+
+                    match cancellation {
+                        ReservationFailure::LimitExceeded => {
+                            return Err(TokenReservationError::LimitExceeded);
+                        }
+                        ReservationFailure::Retry
+                            if attempt + 1 < RESERVATION_TRANSACTION_ATTEMPTS =>
+                        {
+                            sleep(reservation_retry_delay(attempt)).await;
+                        }
+                        ReservationFailure::Retry | ReservationFailure::WriteFailed => {
+                            return Err(TokenReservationError::WriteFailed {
+                                source: Box::new(source),
+                            });
+                        }
                     }
                 }
-            })?;
+            }
+        }
 
         Ok(TokenReservation {
             completion_token,
@@ -350,6 +384,49 @@ impl TokenReservationManager {
                 source: Box::new(source),
             })
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ReservationFailure {
+    LimitExceeded,
+    Retry,
+    WriteFailed,
+}
+
+fn classify_reservation_error(error: &TransactWriteItemsError) -> ReservationFailure {
+    let TransactWriteItemsError::TransactionCanceledException(error) = error else {
+        return ReservationFailure::WriteFailed;
+    };
+
+    classify_cancellation_reasons(error.cancellation_reasons())
+}
+
+pub(crate) fn classify_cancellation_reasons(reasons: &[CancellationReason]) -> ReservationFailure {
+    if reasons
+        .iter()
+        .take(2)
+        .any(|reason| reason.code() == Some("ConditionalCheckFailed"))
+    {
+        return ReservationFailure::LimitExceeded;
+    }
+
+    if reasons.iter().any(|reason| {
+        matches!(
+            reason.code(),
+            Some("TransactionConflict" | "ProvisionedThroughputExceeded" | "ThrottlingError")
+        )
+    }) {
+        return ReservationFailure::Retry;
+    }
+
+    ReservationFailure::WriteFailed
+}
+
+fn reservation_retry_delay(attempt: usize) -> Duration {
+    let base_delay = RESERVATION_RETRY_BASE_DELAY_MILLISECONDS * (1_u64 << attempt);
+    let jitter = fastrand::u64(0..=base_delay);
+
+    Duration::from_millis(base_delay + jitter)
 }
 
 struct ReservationRecord<'a> {
