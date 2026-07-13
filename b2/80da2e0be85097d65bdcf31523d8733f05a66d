@@ -1,0 +1,27 @@
+services/proxy/Cargo.toml
+  s_c26b496cd2589a::t_353ad8f2cf08e4 12
+services/proxy/src/token_reservation.rs
+  s_c26b496cd2589a::t_353ad8f2cf08e4 5,8,10,23-24,106-150,153-154,389-403,405-430
+  s_c26b496cd2589a::t_bcd30bc2312de0 9,404
+  s_c26b496cd2589a::t_e9a00cbdd27121 431
+services/proxy/src/token_reservation_test.rs
+  s_c26b496cd2589a::t_353ad8f2cf08e4 1-83
+services/proxy/Cargo.lock
+  s_c26b496cd2589a::t_468f0367676166 1657
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "b280da2e0be85097d65bdcf31523d8733f05a66d",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
