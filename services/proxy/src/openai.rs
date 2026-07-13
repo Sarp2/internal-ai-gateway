@@ -6,7 +6,7 @@ use std::time::Duration;
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
-use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONTENT_TYPE};
+use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION};
 use axum::http::{HeaderMap, HeaderName, Request, Response, StatusCode};
 use axum::response::IntoResponse;
 use futures_util::stream;
@@ -100,7 +100,7 @@ impl OpenAiProxy {
         };
 
         let is_streaming_response =
-            streaming_request && is_event_stream_response(provider_response.headers());
+            should_stream_provider_response(streaming_request, provider_response.status());
 
         let mut response_builder = Response::builder().status(
             StatusCode::from_u16(provider_response.status().as_u16())
@@ -199,11 +199,8 @@ fn should_forward_openai_request_header(
         && name.as_str() != OPENAI_PROJECT_HEADER
 }
 
-fn is_event_stream_response(headers: &HeaderMap) -> bool {
-    headers
-        .get(CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.to_ascii_lowercase().starts_with("text/event-stream"))
+fn should_stream_provider_response(streaming_request: bool, status: StatusCode) -> bool {
+    streaming_request && status.is_success()
 }
 
 fn copy_response_headers(provider_headers: &HeaderMap, response_headers: Option<&mut HeaderMap>) {
@@ -634,6 +631,11 @@ pub(crate) fn forwards_request_header(name: &HeaderName, headers: &HeaderMap) ->
 #[cfg(test)]
 pub(crate) fn request_headers_recomputed_by_client() -> [HeaderName; 2] {
     [axum::http::header::HOST, axum::http::header::CONTENT_LENGTH]
+}
+
+#[cfg(test)]
+pub(crate) fn streams_provider_response(streaming_request: bool, status: StatusCode) -> bool {
+    should_stream_provider_response(streaming_request, status)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use aws_sdk_dynamodb::config::BehaviorVersion;
 use axum::body::Bytes;
+use axum::http::StatusCode;
 use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONNECTION};
 use axum::http::{HeaderMap, HeaderName};
 use futures_util::{StreamExt, stream};
@@ -11,7 +12,7 @@ use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai::{
     OpenAiStreamUsage, OpenAiUsage, forwards_request_header, openai_usage_from_json_slice,
-    request_headers_recomputed_by_client, test_usage_recording_stream,
+    request_headers_recomputed_by_client, streams_provider_response, test_usage_recording_stream,
 };
 use crate::streams::ActiveStreamTracker;
 use crate::token_reservation::TokenReservationManager;
@@ -56,6 +57,13 @@ fn strips_connection_nominated_headers() {
         &HeaderName::from_static("x-private-hop"),
         &headers
     ));
+}
+
+#[test]
+fn streams_successful_responses_when_requested() {
+    assert!(streams_provider_response(true, StatusCode::OK));
+    assert!(!streams_provider_response(false, StatusCode::OK));
+    assert!(!streams_provider_response(true, StatusCode::BAD_REQUEST));
 }
 
 #[test]
