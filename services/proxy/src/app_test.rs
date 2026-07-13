@@ -14,7 +14,7 @@ use crate::engineer_auth::EngineerAuth;
 use crate::openai;
 use crate::rate_limit::RateLimiter;
 use crate::streams::ActiveStreamTracker;
-use crate::token_usage::TokenUsageChecker;
+use crate::token_accounting::TokenAccounting;
 
 #[tokio::test]
 async fn returns_healthy_status_from_health_route() {
@@ -81,14 +81,14 @@ fn test_app() -> axum::Router {
         120,
         std::time::Duration::from_secs(60),
     ));
-    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+    let token_accounting = TokenAccounting::new(
         aws_sdk_dynamodb::Client::from_conf(
             aws_sdk_dynamodb::Config::builder()
                 .behavior_version(BehaviorVersion::latest())
                 .build(),
         ),
         "token-usage",
-    ));
+    );
 
     app(AppState::new(
         Arc::new(anthropic::test_proxy("test-anthropic-api-key")),
@@ -97,6 +97,6 @@ fn test_app() -> axum::Router {
         Arc::new(openai::test_proxy("test-openai-api-key")),
         rate_limiter,
         Arc::new(ActiveStreamTracker::new(200)),
-        token_usage_checker,
+        token_accounting,
     ))
 }

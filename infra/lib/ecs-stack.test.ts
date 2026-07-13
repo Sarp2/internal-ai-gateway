@@ -48,6 +48,9 @@ test('defines a Fargate task definition for the proxy container', () => {
 	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
 		Family: 'internal-ai-gateway-proxy',
 		Cpu: '512',
+		EphemeralStorage: {
+			SizeInGiB: 100,
+		},
 		Memory: '1024',
 		NetworkMode: 'awsvpc',
 		RequiresCompatibilities: ['FARGATE'],
@@ -86,6 +89,10 @@ test('defines the proxy container port and runtime environment', () => {
 					{
 						Name: 'OPENAI_API_KEY_SECRET_ARN',
 						Value: Match.anyValue(),
+					},
+					{
+						Name: 'OPENAI_DEFAULT_MAX_COMPLETION_TOKENS',
+						Value: '32768',
 					},
 					{
 						Name: 'PORT',

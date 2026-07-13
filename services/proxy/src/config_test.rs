@@ -27,6 +27,7 @@ fn uses_defaults_when_env_values_are_missing() {
         config.openai_api_key_secret_arn,
         "arn:aws:secretsmanager:openai-api-key"
     );
+    assert_eq!(config.openai_default_max_completion_tokens, 32_768);
 }
 
 #[test]
@@ -44,6 +45,7 @@ fn parses_env_values() {
         "TOKEN_USAGE_TABLE_NAME" => Some("custom-token-usage".to_string()),
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
+        "OPENAI_DEFAULT_MAX_COMPLETION_TOKENS" => Some("65536".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -69,6 +71,7 @@ fn parses_env_values() {
         config.openai_api_key_secret_arn,
         "arn:aws:secretsmanager:openai"
     );
+    assert_eq!(config.openai_default_max_completion_tokens, 65_536);
 }
 
 #[test]
@@ -99,6 +102,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
     let config = ProxyConfig::from_values(|name| match name {
         "MAX_ACTIVE_STREAMS"
         | "ACTIVE_STREAM_METRIC_INTERVAL_SECONDS"
+        | "OPENAI_DEFAULT_MAX_COMPLETION_TOKENS"
         | "RATE_LIMIT_REQUESTS_PER_WINDOW"
         | "RATE_LIMIT_WINDOW_SECONDS" => Some("0".to_string()),
         "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
@@ -118,6 +122,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
     assert_eq!(config.metric_interval, Duration::from_secs(1));
     assert_eq!(config.rate_limit_requests_per_window, 1);
     assert_eq!(config.rate_limit_window, Duration::from_secs(1));
+    assert_eq!(config.openai_default_max_completion_tokens, 1);
 }
 
 #[test]

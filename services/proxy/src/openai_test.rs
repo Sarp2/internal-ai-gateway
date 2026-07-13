@@ -14,6 +14,7 @@ use crate::openai::{
     request_headers_recomputed_by_client, test_usage_recording_stream,
 };
 use crate::streams::ActiveStreamTracker;
+use crate::token_reservation::TokenReservationManager;
 use crate::token_usage::TokenUsageChecker;
 
 #[test]
@@ -153,10 +154,22 @@ async fn drains_provider_stream_after_downstream_disconnects() {
         user_id: "engineer-1".to_string(),
         weekly_token_limit: None,
     };
+    let token_reservation_manager = Arc::new(TokenReservationManager::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "token-usage",
+        Arc::clone(&token_usage_checker),
+    ));
+    let reservation = token_reservation_manager
+        .reserve(engineer, 100)
+        .await
+        .expect("unlimited engineer reservation should be created");
     let mut downstream = Box::pin(test_usage_recording_stream(
         provider_stream,
-        token_usage_checker,
-        engineer,
+        reservation,
         stream_guard,
         background_tasks.clone(),
     ));

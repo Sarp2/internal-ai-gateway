@@ -21,7 +21,7 @@ use crate::rate_limit::RateLimiter;
 use crate::shutdown::shutdown_signal;
 use crate::streams::ActiveStreamTracker;
 use crate::telemetry::init_tracing;
-use crate::token_usage::TokenUsageChecker;
+use crate::token_accounting::TokenAccounting;
 
 pub mod anthropic;
 pub mod api_key;
@@ -38,6 +38,8 @@ pub mod rate_limit;
 mod shutdown;
 pub mod streams;
 mod telemetry;
+mod token_accounting;
+mod token_reservation;
 pub mod token_usage;
 
 #[cfg(test)]
@@ -61,6 +63,8 @@ mod rate_limit_test;
 #[cfg(test)]
 mod streams_test;
 #[cfg(test)]
+mod token_reservation_test;
+#[cfg(test)]
 mod token_usage_test;
 
 #[tokio::main]
@@ -81,8 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let anthropic_proxy = Arc::new(
         load_anthropic_proxy(&secrets_client, &config.anthropic_api_key_secret_arn).await?,
     );
-    let openai_proxy =
-        Arc::new(load_openai_proxy(&secrets_client, &config.openai_api_key_secret_arn).await?);
+    let openai_proxy = Arc::new(
+        load_openai_proxy(
+            &secrets_client,
+            &config.openai_api_key_secret_arn,
+            config.openai_default_max_completion_tokens,
+        )
+        .await?,
+    );
     let authenticator = Arc::new(RequestAuthenticator::new(api_key_hasher, engineer_auth));
     let rate_limiter = Arc::new(RateLimiter::new(
         DynamoDbClient::new(&aws_config),
@@ -90,10 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.rate_limit_requests_per_window,
         config.rate_limit_window,
     ));
-    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+    let token_accounting = TokenAccounting::new(
         DynamoDbClient::new(&aws_config),
         config.token_usage_table_name.clone(),
-    ));
+    );
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
     let background_tasks = BackgroundTasks::new();
     start_active_stream_metric_publisher(
@@ -116,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             openai_proxy,
             rate_limiter,
             stream_tracker,
-            token_usage_checker,
+            token_accounting,
         )),
     )
     .with_graceful_shutdown(shutdown_signal())

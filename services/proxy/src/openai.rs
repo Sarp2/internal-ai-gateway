@@ -24,10 +24,10 @@ use crate::app::AppState;
 use crate::auth::AuthError;
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
-use crate::openai_request::{OpenAiRequestTransformError, transform_openai_request};
+use crate::openai_request::{OpenAiRequestTransformError, prepare_openai_request};
 use crate::rate_limit::RateLimitError;
 use crate::streams::OwnedActiveStreamGuard;
-use crate::token_usage::{TokenUsageChecker, TokenUsageError};
+use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const STREAM_CHANNEL_CAPACITY: usize = 8;
@@ -37,13 +37,15 @@ type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
 #[derive(Clone)]
 pub struct OpenAiProxy {
     api_key: Arc<str>,
+    default_max_completion_tokens: u64,
     http_client: HttpClient,
 }
 
 impl OpenAiProxy {
-    pub fn new(api_key: impl Into<Arc<str>>) -> Self {
+    pub fn new(api_key: impl Into<Arc<str>>, default_max_completion_tokens: u64) -> Self {
         Self {
             api_key: api_key.into(),
+            default_max_completion_tokens: default_max_completion_tokens.max(1),
             http_client: HttpClient::builder()
                 .connect_timeout(Duration::from_secs(10))
                 .pool_idle_timeout(Duration::from_secs(90))
@@ -58,12 +60,21 @@ impl OpenAiProxy {
         &self,
         request: Request<Body>,
         engineer: AuthenticatedEngineer,
-        token_usage_checker: Arc<TokenUsageChecker>,
+        token_reservation_manager: Arc<TokenReservationManager>,
         stream_guard: OwnedActiveStreamGuard,
         background_tasks: BackgroundTasks,
     ) -> Result<Response<Body>, OpenAiProxyError> {
         let (parts, body) = request.into_parts();
-        let (provider_body, transform_completion) = transform_openai_request(body).into_parts();
+        let prepared_request = prepare_openai_request(body, self.default_max_completion_tokens)
+            .await
+            .map_err(OpenAiProxyError::RequestTransform)?;
+
+        let (provider_body, streaming_request, token_budget) = prepared_request.into_parts();
+
+        let reservation = token_reservation_manager
+            .reserve(engineer.clone(), token_budget)
+            .await
+            .map_err(OpenAiProxyError::TokenReservation)?;
         let request_connection_headers = ConnectionHeaderNames::from_headers(&parts.headers);
         let mut provider_request = self
             .http_client
@@ -76,15 +87,14 @@ impl OpenAiProxy {
             }
         }
 
-        let provider_response = provider_request.body(provider_body).send().await;
-        let transform_result = transform_completion.finish().await;
-        let (provider_response, streaming_request) = match (provider_response, transform_result) {
-            (Ok(response), Ok(streaming)) => (response, streaming),
-            (_, Err(error)) if error.is_client_error() => {
-                return Err(OpenAiProxyError::RequestTransform(error));
+        let provider_response = match provider_request.body(provider_body).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                if let Err(reconciliation_error) = reservation.reconcile(None).await {
+                    warn!(%reconciliation_error, "failed to finalize OpenAI reservation after provider failure");
+                }
+                return Err(OpenAiProxyError::ProviderRequest(error));
             }
-            (Err(error), _) => return Err(OpenAiProxyError::ProviderRequest(error)),
-            (Ok(_), Err(error)) => return Err(OpenAiProxyError::RequestTransform(error)),
         };
 
         let is_streaming_response =
@@ -98,15 +108,20 @@ impl OpenAiProxy {
         copy_response_headers(provider_response.headers(), response_builder.headers_mut());
 
         if !is_streaming_response {
-            let body = provider_response
-                .bytes()
-                .await
-                .map_err(OpenAiProxyError::ProviderRequest)?;
+            let body = match provider_response.bytes().await {
+                Ok(body) => body,
+                Err(error) => {
+                    if let Err(reconciliation_error) = reservation.reconcile(None).await {
+                        warn!(%reconciliation_error, "failed to finalize OpenAI reservation after response failure");
+                    }
+                    return Err(OpenAiProxyError::ProviderRequest(error));
+                }
+            };
 
-            if let Err(error) =
-                record_usage_from_json_body(&token_usage_checker, &engineer, &body).await
-            {
-                warn!(%error, "failed to record non-streaming OpenAI token usage");
+            let actual_tokens = openai_usage_from_json_slice(&body).map(|usage| usage.total_tokens);
+
+            if let Err(error) = reservation.reconcile(actual_tokens).await {
+                warn!(%error, "failed to reconcile non-streaming OpenAI token usage");
             }
 
             return response_builder
@@ -116,8 +131,7 @@ impl OpenAiProxy {
 
         let stream = usage_recording_stream(
             provider_response.bytes_stream(),
-            token_usage_checker,
-            engineer,
+            reservation,
             stream_guard,
             background_tasks,
         );
@@ -154,12 +168,6 @@ async fn handle_chat_completions(
         .await
         .map_err(OpenAiRouteError::RateLimit)?;
 
-    state
-        .token_usage_checker
-        .check_limits(&engineer)
-        .await
-        .map_err(OpenAiRouteError::TokenUsage)?;
-
     let stream_guard = state
         .stream_tracker
         .try_start_owned()
@@ -170,7 +178,7 @@ async fn handle_chat_completions(
         .forward_chat_completions(
             request,
             engineer,
-            Arc::clone(&state.token_usage_checker),
+            state.token_accounting.reservation_manager(),
             stream_guard,
             state.background_tasks.clone(),
         )
@@ -231,46 +239,18 @@ fn openai_usage_from_json_value(value: &Value) -> Option<OpenAiUsage> {
     })
 }
 
-async fn record_usage_from_json_body(
-    token_usage_checker: &TokenUsageChecker,
-    engineer: &AuthenticatedEngineer,
-    body: &Bytes,
-) -> Result<(), OpenAiProxyError> {
-    let Some(usage) = openai_usage_from_json_slice(body) else {
-        return Ok(());
-    };
-
-    record_openai_usage(token_usage_checker, engineer, usage).await
-}
-
-async fn record_openai_usage(
-    token_usage_checker: &TokenUsageChecker,
-    engineer: &AuthenticatedEngineer,
-    usage: OpenAiUsage,
-) -> Result<(), OpenAiProxyError> {
-    if usage.total_tokens == 0 {
-        return Ok(());
-    }
-
-    token_usage_checker
-        .record_tokens(engineer, usage.total_tokens)
-        .await
-        .map_err(OpenAiProxyError::TokenUsageRecord)
-}
-
 fn usage_recording_stream(
     provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
-    token_usage_checker: Arc<TokenUsageChecker>,
-    engineer: AuthenticatedEngineer,
+    reservation: TokenReservation,
     stream_guard: OwnedActiveStreamGuard,
     background_tasks: BackgroundTasks,
 ) -> impl Stream<Item = ProxyStreamItem> {
     let (sender, receiver) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
-    let engineer_id = engineer.user_id.clone();
+    let engineer_id = reservation.engineer_id().to_string();
 
     background_tasks.spawn(async move {
         let mut provider_stream = provider_stream;
-        let mut usage_recorder = OpenAiStreamUsageRecorder::new(token_usage_checker, engineer);
+        let mut usage_recorder = OpenAiStreamUsageRecorder::new(reservation);
         let mut downstream_connected = true;
         let _stream_guard = stream_guard;
 
@@ -310,19 +290,17 @@ fn usage_recording_stream(
 
 struct OpenAiStreamUsageRecorder {
     buffered_event: Vec<u8>,
-    engineer: AuthenticatedEngineer,
     recording_attempted: bool,
-    token_usage_checker: Arc<TokenUsageChecker>,
+    reservation: Option<TokenReservation>,
     usage: Option<OpenAiUsage>,
 }
 
 impl OpenAiStreamUsageRecorder {
-    fn new(token_usage_checker: Arc<TokenUsageChecker>, engineer: AuthenticatedEngineer) -> Self {
+    fn new(reservation: TokenReservation) -> Self {
         Self {
             buffered_event: Vec::new(),
-            engineer,
             recording_attempted: false,
-            token_usage_checker,
+            reservation: Some(reservation),
             usage: None,
         }
     }
@@ -343,12 +321,17 @@ impl OpenAiStreamUsageRecorder {
     async fn record_observed_usage(&mut self) -> Result<(), OpenAiProxyError> {
         self.recording_attempted = true;
 
-        let Some(usage) = self.usage else {
-            warn!("OpenAI stream ended without a final usage chunk");
-            return Ok(());
-        };
+        let actual_tokens = self.usage.map(|usage| usage.total_tokens);
+        if actual_tokens.is_none() {
+            warn!("OpenAI stream ended without a final usage chunk; charging reservation");
+        }
 
-        record_openai_usage(&self.token_usage_checker, &self.engineer, usage).await
+        self.reservation
+            .take()
+            .expect("OpenAI reservation should only be reconciled once")
+            .reconcile(actual_tokens)
+            .await
+            .map_err(OpenAiProxyError::TokenReservation)
     }
 }
 
@@ -358,21 +341,20 @@ impl Drop for OpenAiStreamUsageRecorder {
             return;
         }
 
-        let Some(usage) = self.usage else {
-            warn!("OpenAI stream was dropped before a final usage chunk was received");
+        let actual_tokens = self.usage.map(|usage| usage.total_tokens);
+        let Some(reservation) = self.reservation.take() else {
             return;
         };
-
-        let token_usage_checker = Arc::clone(&self.token_usage_checker);
-        let engineer = self.engineer.clone();
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            warn!("failed to record dropped OpenAI streaming token usage: no Tokio runtime");
+            warn!(
+                "failed to reconcile dropped OpenAI stream: no Tokio runtime; reservation remains charged"
+            );
             return;
         };
 
         handle.spawn(async move {
-            if let Err(error) = record_openai_usage(&token_usage_checker, &engineer, usage).await {
-                warn!(%error, "failed to record dropped OpenAI streaming token usage");
+            if let Err(error) = reservation.reconcile(actual_tokens).await {
+                warn!(%error, "failed to reconcile dropped OpenAI streaming token usage");
             }
         });
     }
@@ -452,6 +434,7 @@ fn sse_event_data(event: &[u8]) -> Option<Vec<u8>> {
 pub async fn load_openai_proxy(
     secrets_client: &SecretsManagerClient,
     secret_arn: &str,
+    default_max_completion_tokens: u64,
 ) -> Result<OpenAiProxy, OpenAiSecretError> {
     let output = secrets_client
         .get_secret_value()
@@ -469,14 +452,16 @@ pub async fn load_openai_proxy(
         return Err(OpenAiSecretError::EmptySecretString);
     }
 
-    Ok(OpenAiProxy::new(api_key.to_string()))
+    Ok(OpenAiProxy::new(
+        api_key.to_string(),
+        default_max_completion_tokens,
+    ))
 }
 
 #[derive(Debug)]
 enum OpenAiRouteError {
     Auth(AuthError),
     RateLimit(RateLimitError),
-    TokenUsage(TokenUsageError),
     TooManyActiveStreams,
     Proxy(OpenAiProxyError),
 }
@@ -507,22 +492,25 @@ impl IntoResponse for OpenAiRouteError {
                     "rate limit check is temporarily unavailable".to_string(),
                 )
             }
-            Self::TokenUsage(TokenUsageError::DailyLimitExceeded)
-            | Self::TokenUsage(TokenUsageError::WeeklyLimitExceeded)
-            | Self::TokenUsage(TokenUsageError::LimitExceededDuringInputRecording) => {
-                (StatusCode::PAYMENT_REQUIRED, self.to_string())
-            }
-            Self::TokenUsage(_) => {
-                error!(error = %self, "OpenAI token usage check failed");
+            Self::Proxy(OpenAiProxyError::TokenReservation(
+                TokenReservationError::LimitExceeded,
+            )) => (StatusCode::PAYMENT_REQUIRED, self.to_string()),
+            Self::Proxy(OpenAiProxyError::TokenReservation(_)) => {
+                error!(error = %self, "OpenAI token reservation failed");
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    "token usage check is temporarily unavailable".to_string(),
+                    "token reservation is temporarily unavailable".to_string(),
                 )
             }
             Self::TooManyActiveStreams => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many active streams".to_string(),
             ),
+            Self::Proxy(OpenAiProxyError::RequestTransform(error))
+                if error.is_request_too_large() =>
+            {
+                (StatusCode::PAYLOAD_TOO_LARGE, self.to_string())
+            }
             Self::Proxy(OpenAiProxyError::RequestTransform(error)) if error.is_client_error() => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }
@@ -541,7 +529,6 @@ impl Display for OpenAiRouteError {
         match self {
             Self::Auth(error) => write!(formatter, "{error}"),
             Self::RateLimit(error) => write!(formatter, "{error}"),
-            Self::TokenUsage(error) => write!(formatter, "{error}"),
             Self::TooManyActiveStreams => write!(formatter, "too many active streams"),
             Self::Proxy(error) => write!(formatter, "{error}"),
         }
@@ -553,7 +540,6 @@ impl Error for OpenAiRouteError {
         match self {
             Self::Auth(error) => Some(error),
             Self::RateLimit(error) => Some(error),
-            Self::TokenUsage(error) => Some(error),
             Self::Proxy(error) => Some(error),
             Self::TooManyActiveStreams => None,
         }
@@ -565,7 +551,7 @@ enum OpenAiProxyError {
     ProviderRequest(reqwest::Error),
     RequestTransform(OpenAiRequestTransformError),
     ResponseBuild(axum::http::Error),
-    TokenUsageRecord(TokenUsageError),
+    TokenReservation(TokenReservationError),
 }
 
 impl Display for OpenAiProxyError {
@@ -580,8 +566,8 @@ impl Display for OpenAiProxyError {
             Self::ResponseBuild(error) => {
                 write!(formatter, "failed to build OpenAI response: {error}")
             }
-            Self::TokenUsageRecord(error) => {
-                write!(formatter, "failed to record OpenAI token usage: {error}")
+            Self::TokenReservation(error) => {
+                write!(formatter, "OpenAI token reservation failed: {error}")
             }
         }
     }
@@ -593,7 +579,7 @@ impl Error for OpenAiProxyError {
             Self::ProviderRequest(error) => Some(error),
             Self::RequestTransform(error) => Some(error),
             Self::ResponseBuild(error) => Some(error),
-            Self::TokenUsageRecord(error) => Some(error),
+            Self::TokenReservation(error) => Some(error),
         }
     }
 }
@@ -633,7 +619,7 @@ impl Error for OpenAiSecretError {
 
 #[cfg(test)]
 pub(crate) fn test_proxy(api_key: &str) -> OpenAiProxy {
-    OpenAiProxy::new(api_key.to_string())
+    OpenAiProxy::new(api_key.to_string(), 32_768)
 }
 
 #[cfg(test)]
@@ -649,16 +635,9 @@ pub(crate) fn request_headers_recomputed_by_client() -> [HeaderName; 2] {
 #[cfg(test)]
 pub(crate) fn test_usage_recording_stream(
     provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
-    token_usage_checker: Arc<TokenUsageChecker>,
-    engineer: AuthenticatedEngineer,
+    reservation: TokenReservation,
     stream_guard: OwnedActiveStreamGuard,
     background_tasks: BackgroundTasks,
 ) -> impl Stream<Item = ProxyStreamItem> {
-    usage_recording_stream(
-        provider_stream,
-        token_usage_checker,
-        engineer,
-        stream_guard,
-        background_tasks,
-    )
+    usage_recording_stream(provider_stream, reservation, stream_guard, background_tasks)
 }

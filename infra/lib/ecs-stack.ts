@@ -127,6 +127,7 @@ export class EcsStack extends Stack {
 		this.proxyTaskDefinition = new FargateTaskDefinition(this, 'ProxyTaskDefinition', {
 			family: proxyServiceName,
 			cpu: 512,
+			ephemeralStorageGiB: 100,
 			memoryLimitMiB: 1024,
 		});
 
@@ -189,6 +190,7 @@ export class EcsStack extends Stack {
 				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
 				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
+				OPENAI_DEFAULT_MAX_COMPLETION_TOKENS: '32768',
 				PORT: String(proxyContainerPort),
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',

@@ -138,7 +138,8 @@ async fn handle_messages(
         .map_err(AnthropicRouteError::RateLimit)?;
 
     state
-        .token_usage_checker
+        .token_accounting
+        .usage_checker()
         .check_limits(&engineer)
         .await
         .map_err(AnthropicRouteError::TokenUsage)?;
@@ -153,7 +154,7 @@ async fn handle_messages(
         .forward_messages(
             request,
             engineer,
-            Arc::clone(&state.token_usage_checker),
+            state.token_accounting.usage_checker(),
             stream_guard,
         )
         .await

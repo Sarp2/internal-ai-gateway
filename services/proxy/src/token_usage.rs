@@ -8,6 +8,7 @@ use aws_sdk_dynamodb::types::{AttributeValue, TransactWriteItem, Update};
 use crate::engineer_auth::AuthenticatedEngineer;
 
 const DAILY_WINDOW_PREFIX: &str = "daily";
+const CONSUMED_TOKENS_ATTRIBUTE: &str = "consumed_tokens";
 const TOKEN_COUNT_ATTRIBUTE: &str = "token_count";
 const USAGE_WINDOW_ATTRIBUTE: &str = "usage_window";
 const USER_ID_ATTRIBUTE: &str = "user_id";
@@ -199,7 +200,8 @@ impl TokenUsageChecker {
                 USAGE_WINDOW_ATTRIBUTE,
                 AttributeValue::S(usage_window.to_string()),
             )
-            .update_expression("SET #ttl = :ttl ADD #token_count :tokens")
+            .update_expression("SET #ttl = :ttl ADD #token_count :tokens, #consumed_tokens :tokens")
+            .expression_attribute_names("#consumed_tokens", CONSUMED_TOKENS_ATTRIBUTE)
             .expression_attribute_names("#token_count", TOKEN_COUNT_ATTRIBUTE)
             .expression_attribute_names("#ttl", "ttl")
             .expression_attribute_values(":tokens", AttributeValue::N(token_count.to_string()))
@@ -272,7 +274,7 @@ pub(crate) fn token_count_from_attribute(
     }
 }
 
-fn current_epoch_seconds() -> Result<u64, TokenUsageError> {
+pub(crate) fn current_epoch_seconds() -> Result<u64, TokenUsageError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())

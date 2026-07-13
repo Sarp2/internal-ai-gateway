@@ -3,24 +3,25 @@ use std::io::{self, Cursor, Read};
 use axum::body::{Body, to_bytes};
 use serde_json::Value;
 
-use crate::openai_request::{transform_openai_request, transform_reader, transform_slice};
+use crate::openai_request::{prepare_openai_request, transform_reader, transform_slice};
 
 #[test]
 fn forces_usage_in_streaming_requests_and_preserves_options() {
-    let (body, streaming) = transform_slice(
+    let (body, streaming, max_output_tokens) = transform_slice(
         br#"{"model":"gpt-5","stream":true,"stream_options":{"include_obfuscation":false}}"#,
     )
     .expect("request should transform");
     let value: Value = serde_json::from_slice(&body).expect("rewritten request should be JSON");
 
     assert!(streaming);
+    assert_eq!(max_output_tokens, 32_768);
     assert_eq!(value["stream_options"]["include_usage"], true);
     assert_eq!(value["stream_options"]["include_obfuscation"], false);
 }
 
 #[test]
 fn handles_stream_options_before_stream() {
-    let (body, streaming) = transform_slice(
+    let (body, streaming, _) = transform_slice(
         br#"{"stream_options":{"include_usage":false},"model":"gpt-5","stream":true}"#,
     )
     .expect("request should transform");
@@ -33,13 +34,16 @@ fn handles_stream_options_before_stream() {
 #[test]
 fn preserves_non_streaming_request_semantics() {
     let original = br#"{ "model": "gpt-5", "stream": false, "messages": [{ "role": "user", "content": "hello" }] }"#;
-    let (body, streaming) = transform_slice(original).expect("request should transform");
+    let (body, streaming, max_output_tokens) =
+        transform_slice(original).expect("request should transform");
 
     assert!(!streaming);
-    assert_eq!(
-        serde_json::from_slice::<Value>(&body).unwrap(),
-        serde_json::from_slice::<Value>(original).unwrap()
-    );
+    let value = serde_json::from_slice::<Value>(&body).unwrap();
+    assert_eq!(value["model"], "gpt-5");
+    assert_eq!(value["stream"], false);
+    assert_eq!(value["messages"][0]["content"], "hello");
+    assert_eq!(value["max_completion_tokens"], 32_768);
+    assert_eq!(max_output_tokens, 32_768);
 }
 
 #[test]
@@ -82,24 +86,72 @@ fn transforms_input_split_across_small_reads() {
 
 #[tokio::test]
 async fn streams_between_axum_and_reqwest_bodies() {
-    let transformed = transform_openai_request(Body::from(
-        r#"{"model":"gpt-5","messages":[{"content":"hello"}],"stream":true}"#,
-    ));
+    let transformed = prepare_openai_request(
+        Body::from(r#"{"model":"gpt-5","messages":[{"content":"hello"}],"stream":true}"#),
+        32_768,
+    )
+    .await
+    .expect("request should prepare");
 
-    let (body, completion) = transformed.into_parts();
+    let (body, streaming, token_budget) = transformed.into_parts();
     let output = to_bytes(Body::new(body), 1024)
         .await
         .expect("transformed body should stream");
 
-    let streaming = completion
-        .finish()
-        .await
-        .expect("transformation should complete");
-
     let value: Value = serde_json::from_slice(&output).expect("output should be valid JSON");
 
     assert!(streaming);
+    assert_eq!(token_budget, output.len() as u64 + 32_768);
     assert_eq!(value["stream_options"]["include_usage"], true);
+}
+
+#[tokio::test]
+async fn adds_a_conservative_reservation_for_image_inputs() {
+    let transformed = prepare_openai_request(
+        Body::from(
+            r#"{"model":"gpt-5","messages":[{"content":[{"type":"image_url","image_url":{"url":"https://example.com/image.png"}}]}],"max_completion_tokens":5000}"#,
+        ),
+        32_768,
+    )
+    .await
+    .expect("image request should prepare");
+
+    let (body, _, token_budget) = transformed.into_parts();
+    let output = to_bytes(Body::new(body), 4096)
+        .await
+        .expect("prepared body should be readable");
+
+    assert_eq!(token_budget, output.len() as u64 + 5_000 + 32_768);
+}
+
+#[tokio::test]
+async fn detects_escaped_image_input_keys() {
+    let transformed = prepare_openai_request(
+        Body::from(
+            r#"{"model":"gpt-5","messages":[{"content":[{"image\u005furl":{"url":"https://example.com/image.png"}}]}],"max_completion_tokens":5000}"#,
+        ),
+        32_768,
+    )
+    .await
+    .expect("escaped image request should prepare");
+
+    let (body, _, token_budget) = transformed.into_parts();
+    let output = to_bytes(Body::new(body), 4096)
+        .await
+        .expect("prepared body should be readable");
+
+    assert_eq!(token_budget, output.len() as u64 + 5_000 + 32_768);
+}
+
+#[test]
+fn preserves_explicit_completion_limit_for_reservation() {
+    let (body, _, max_output_tokens) =
+        transform_slice(br#"{"model":"gpt-5","messages":[],"max_completion_tokens":5000}"#)
+            .expect("request should transform");
+    let value: Value = serde_json::from_slice(&body).expect("request should remain JSON");
+
+    assert_eq!(value["max_completion_tokens"], 5000);
+    assert_eq!(max_output_tokens, 5000);
 }
 
 #[test]

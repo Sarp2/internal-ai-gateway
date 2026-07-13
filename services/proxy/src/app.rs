@@ -15,7 +15,7 @@ use crate::health::health;
 use crate::openai::{OpenAiProxy, chat_completions};
 use crate::rate_limit::RateLimiter;
 use crate::streams::ActiveStreamTracker;
-use crate::token_usage::TokenUsageChecker;
+use crate::token_accounting::TokenAccounting;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,7 +25,7 @@ pub struct AppState {
     pub(crate) openai_proxy: Arc<OpenAiProxy>,
     pub(crate) rate_limiter: Arc<RateLimiter>,
     pub(crate) stream_tracker: Arc<ActiveStreamTracker>,
-    pub(crate) token_usage_checker: Arc<TokenUsageChecker>,
+    pub(crate) token_accounting: TokenAccounting,
 }
 
 impl AppState {
@@ -36,7 +36,7 @@ impl AppState {
         openai_proxy: Arc<OpenAiProxy>,
         rate_limiter: Arc<RateLimiter>,
         stream_tracker: Arc<ActiveStreamTracker>,
-        token_usage_checker: Arc<TokenUsageChecker>,
+        token_accounting: TokenAccounting,
     ) -> Self {
         Self {
             anthropic_proxy,
@@ -45,7 +45,7 @@ impl AppState {
             openai_proxy,
             rate_limiter,
             stream_tracker,
-            token_usage_checker,
+            token_accounting,
         }
     }
 }
