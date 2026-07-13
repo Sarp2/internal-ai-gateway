@@ -1,0 +1,90 @@
+services/proxy/src/openai_request_test.rs
+  s_c26b496cd2589a::t_4fa8bcadab98a5 104,108-124
+  s_c26b496cd2589a::t_003575d2451557 127-145,155
+  s_c26b496cd2589a::t_29054d51ea6650 6,10,17,24,37-38,41-46,89-94,96,125-126,146-147,151-154
+  s_c26b496cd2589a::t_21ae0d878934aa 148-150
+  s_c26b496cd2589a::t_cfcf1e97b3ff19 156
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_3d5f7a06c6f603 141-142,157
+services/proxy/Cargo.toml
+  s_c26b496cd2589a::t_1d922ddc652194 19-21,24
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_21ae0d878934aa 203
+  s_c26b496cd2589a::t_1d922ddc652194 11,204,277
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_b14b1f4a47e016 51-53,93-95
+  s_c26b496cd2589a::t_405769eb0032f0 96
+services/proxy/src/app.rs
+  s_c26b496cd2589a::t_3d5f7a06c6f603 18,28,39,48
+services/proxy/src/openai.rs
+  s_c26b496cd2589a::t_118f6902e7e4a1 437,455-458,495-496,498-499,502,509-513,554,569-570,582,622,638
+  s_c26b496cd2589a::t_21ae0d878934aa 30,349-351,497,642
+  s_c26b496cd2589a::t_aab038bd141533 27,40,45,63,68-70,72,74-77,90-96,121-124,134,244,249,253,294,299,303,324-327,329-334,344-345,356-357
+  s_c26b496cd2589a::t_2040855935f663 71,73
+  s_c26b496cd2589a::t_3d5f7a06c6f603 181
+  s_c26b496cd2589a::t_2b68eb5b3328fb 111-119
+  s_c26b496cd2589a::t_1eb32e312f1f42 48
+services/proxy/src/app_test.rs
+  s_c26b496cd2589a::t_cd141bef2eca78 17,84,91,100
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_0b68b5d59e58fa 9,22,68-72
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_21ae0d878934aa 67
+  s_c26b496cd2589a::t_2b68eb5b3328fb 66
+  s_c26b496cd2589a::t_16ba1cb2ab8293 88-95
+  s_c26b496cd2589a::t_1d922ddc652194 42
+  s_c26b496cd2589a::t_3d5f7a06c6f603 24,41,103,106,129
+services/proxy/src/openai_test.rs
+  s_c26b496cd2589a::t_29054d51ea6650 17,157-169,172
+services/proxy/src/token_reservation.rs
+  s_c26b496cd2589a::t_118f6902e7e4a1 407-410
+  s_c26b496cd2589a::t_af4d7855f26a46 211
+  s_c26b496cd2589a::t_1d922ddc652194 1-19,21-22,24-73,76-81,83-90,95-96,100-140,142-148,150-176,178-180,182-184,186-191,196-200,202-204,206-208,216-233,236-237,242-243,245-352,375-403,405-406,411-435,440-455
+  s_c26b496cd2589a::t_6d0345e6be346e 20,192,194-195
+  s_c26b496cd2589a::t_003575d2451557 141
+  s_c26b496cd2589a::t_224cc010d020b9 91-94,97-99,177,181,185,193,201,205,209-210,212-215,353-362
+  s_c26b496cd2589a::t_21ae0d878934aa 74-75,82,149,404,436-439
+  s_c26b496cd2589a::t_2b68eb5b3328fb 234-235,363-374
+  s_c26b496cd2589a::t_1eb32e312f1f42 23
+  s_c26b496cd2589a::t_0b68b5d59e58fa 238-241,244
+services/proxy/src/token_reservation_test.rs
+  s_c26b496cd2589a::t_2b68eb5b3328fb 1-31
+services/proxy/src/token_accounting.rs
+  s_c26b496cd2589a::t_3d5f7a06c6f603 1-40
+services/proxy/src/openai_request.rs
+  s_c26b496cd2589a::t_d9a59bbd6119da 57-58,66-67
+  s_c26b496cd2589a::t_6d0345e6be346e 304,307-308
+  s_c26b496cd2589a::t_33fd9ec2bc92fb 6,10-11,19,23,25-26,29-31,35-38,43,45-48,50-55,62-65,68-74,154,183-184,189-190,222-234,238-240,280-290,294-298,311-331
+  s_c26b496cd2589a::t_16ba1cb2ab8293 291-293
+  s_c26b496cd2589a::t_003eea7048f1c3 708,718
+  s_c26b496cd2589a::t_3d0617e1ffd78b 3,8,15,42,59-61,75-137,141-153
+  s_c26b496cd2589a::t_21ae0d878934aa 235-237
+  s_c26b496cd2589a::t_2040855935f663 49,56
+  s_c26b496cd2589a::t_118f6902e7e4a1 299,649-652
+  s_c26b496cd2589a::t_2e2e99c350cd16 443-446,449-455,459,461-465,468-470,474,630,632,645-646,672-674,681,696-697,704-706,709,717
+  s_c26b496cd2589a::t_50198ea7767e88 155
+  s_c26b496cd2589a::t_bef5a05974d305 300
+  s_c26b496cd2589a::t_9d41c304b57a1c 309
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_b14b1f4a47e016 130,193
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_b14b1f4a47e016 30,48,74,105,125
+services/proxy/Cargo.lock
+  s_c26b496cd2589a::t_f25a6a2de99db7 1446-1451,1664,1670,1869-1881,2250-2262,2570
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "f00a51891d983426c6b4369e60936e1404818dce",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
