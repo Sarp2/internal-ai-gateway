@@ -30,6 +30,8 @@ use crate::streams::OwnedActiveStreamGuard;
 use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
+const OPENAI_ORGANIZATION_HEADER: &str = "openai-organization";
+const OPENAI_PROJECT_HEADER: &str = "openai-project";
 const STREAM_CHANNEL_CAPACITY: usize = 8;
 
 type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
@@ -193,6 +195,8 @@ fn should_forward_openai_request_header(
     should_forward_request_header(name, connection_headers)
         && name != AUTHORIZATION
         && name != ACCEPT_ENCODING
+        && name.as_str() != OPENAI_ORGANIZATION_HEADER
+        && name.as_str() != OPENAI_PROJECT_HEADER
 }
 
 fn is_event_stream_response(headers: &HeaderMap) -> bool {

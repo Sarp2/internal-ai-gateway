@@ -34,6 +34,20 @@ fn strips_gateway_and_provider_credentials_from_forwarded_headers() {
 }
 
 #[test]
+fn strips_provider_billing_scope_headers() {
+    let headers = HeaderMap::new();
+
+    assert!(!forwards_request_header(
+        &HeaderName::from_static("openai-organization"),
+        &headers
+    ));
+    assert!(!forwards_request_header(
+        &HeaderName::from_static("openai-project"),
+        &headers
+    ));
+}
+
+#[test]
 fn strips_connection_nominated_headers() {
     let mut headers = HeaderMap::new();
     headers.insert(CONNECTION, "x-private-hop".parse().unwrap());
