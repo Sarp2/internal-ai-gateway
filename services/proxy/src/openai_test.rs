@@ -6,50 +6,15 @@ use axum::body::Bytes;
 use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONNECTION};
 use axum::http::{HeaderMap, HeaderName};
 use futures_util::{StreamExt, stream};
-use serde_json::Value;
 
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai::{
     OpenAiStreamUsage, OpenAiUsage, forwards_request_header, openai_usage_from_json_slice,
-    prepare_request_body, request_headers_recomputed_by_client, test_usage_recording_stream,
+    request_headers_recomputed_by_client, test_usage_recording_stream,
 };
 use crate::streams::ActiveStreamTracker;
 use crate::token_usage::TokenUsageChecker;
-
-#[test]
-fn forces_usage_in_streaming_requests_and_preserves_options() {
-    let (body, streaming) = prepare_request_body(
-        br#"{"model":"gpt-5","stream":true,"stream_options":{"include_obfuscation":false}}"#,
-    )
-    .expect("request should parse");
-    let value: Value = serde_json::from_slice(&body).expect("rewritten request should be JSON");
-
-    assert!(streaming);
-    assert_eq!(value["stream_options"]["include_usage"], true);
-    assert_eq!(value["stream_options"]["include_obfuscation"], false);
-}
-
-#[test]
-fn leaves_non_streaming_request_semantics_unchanged() {
-    let original = br#"{ "model": "gpt-5", "messages": [{ "role": "user", "content": "hello" }] }"#;
-    let (body, streaming) = prepare_request_body(original).expect("request should parse");
-
-    assert!(!streaming);
-    assert_eq!(body, original);
-}
-
-#[test]
-fn rejects_non_object_stream_options_for_streaming_requests() {
-    let error =
-        prepare_request_body(br#"{"model":"gpt-5","stream":true,"stream_options":"invalid"}"#)
-            .expect_err("invalid stream options should fail");
-
-    assert_eq!(
-        error.to_string(),
-        "OpenAI stream_options must be a JSON object"
-    );
-}
 
 #[test]
 fn strips_gateway_and_provider_credentials_from_forwarded_headers() {

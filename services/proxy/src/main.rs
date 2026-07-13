@@ -33,6 +33,7 @@ pub mod engineer_auth;
 mod health;
 mod metrics;
 pub mod openai;
+mod openai_request;
 pub mod rate_limit;
 mod shutdown;
 pub mod streams;
@@ -51,6 +52,8 @@ mod auth_test;
 mod config_test;
 #[cfg(test)]
 mod engineer_auth_test;
+#[cfg(test)]
+mod openai_request_test;
 #[cfg(test)]
 mod openai_test;
 #[cfg(test)]

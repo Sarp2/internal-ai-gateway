@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
-use axum::body::{Body, Bytes, to_bytes};
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::header::{ACCEPT_ENCODING, AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderName, Request, Response, StatusCode};
@@ -13,7 +13,7 @@ use futures_util::stream;
 use futures_util::{Stream, StreamExt};
 use reqwest::Client as HttpClient;
 use reqwest::redirect::Policy;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tracing::{error, warn};
 
@@ -24,12 +24,12 @@ use crate::app::AppState;
 use crate::auth::AuthError;
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
+use crate::openai_request::{OpenAiRequestTransformError, transform_openai_request};
 use crate::rate_limit::RateLimitError;
 use crate::streams::OwnedActiveStreamGuard;
 use crate::token_usage::{TokenUsageChecker, TokenUsageError};
 
 const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
-const MAX_REQUEST_BODY_BYTES: usize = 20 * 1024 * 1024;
 const STREAM_CHANNEL_CAPACITY: usize = 8;
 
 type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
@@ -63,11 +63,7 @@ impl OpenAiProxy {
         background_tasks: BackgroundTasks,
     ) -> Result<Response<Body>, OpenAiProxyError> {
         let (parts, body) = request.into_parts();
-        let body = to_bytes(body, MAX_REQUEST_BODY_BYTES)
-            .await
-            .map_err(OpenAiProxyError::RequestBodyReadFailed)?;
-
-        let (provider_body, streaming_request) = prepare_request_body(&body)?;
+        let (provider_body, transform_completion) = transform_openai_request(body).into_parts();
         let request_connection_headers = ConnectionHeaderNames::from_headers(&parts.headers);
         let mut provider_request = self
             .http_client
@@ -80,11 +76,16 @@ impl OpenAiProxy {
             }
         }
 
-        let provider_response = provider_request
-            .body(provider_body)
-            .send()
-            .await
-            .map_err(OpenAiProxyError::ProviderRequestFailed)?;
+        let provider_response = provider_request.body(provider_body).send().await;
+        let transform_result = transform_completion.finish().await;
+        let (provider_response, streaming_request) = match (provider_response, transform_result) {
+            (Ok(response), Ok(streaming)) => (response, streaming),
+            (_, Err(error)) if error.is_client_error() => {
+                return Err(OpenAiProxyError::RequestTransform(error));
+            }
+            (Err(error), _) => return Err(OpenAiProxyError::ProviderRequest(error)),
+            (Ok(_), Err(error)) => return Err(OpenAiProxyError::RequestTransform(error)),
+        };
 
         let is_streaming_response =
             streaming_request && is_event_stream_response(provider_response.headers());
@@ -100,7 +101,7 @@ impl OpenAiProxy {
             let body = provider_response
                 .bytes()
                 .await
-                .map_err(OpenAiProxyError::ProviderRequestFailed)?;
+                .map_err(OpenAiProxyError::ProviderRequest)?;
 
             if let Err(error) =
                 record_usage_from_json_body(&token_usage_checker, &engineer, &body).await
@@ -110,7 +111,7 @@ impl OpenAiProxy {
 
             return response_builder
                 .body(Body::from(body))
-                .map_err(OpenAiProxyError::ResponseBuildFailed);
+                .map_err(OpenAiProxyError::ResponseBuild);
         }
 
         let stream = usage_recording_stream(
@@ -123,7 +124,7 @@ impl OpenAiProxy {
 
         response_builder
             .body(Body::from_stream(stream))
-            .map_err(OpenAiProxyError::ResponseBuildFailed)
+            .map_err(OpenAiProxyError::ResponseBuild)
     }
 }
 
@@ -175,36 +176,6 @@ async fn handle_chat_completions(
         )
         .await
         .map_err(OpenAiRouteError::Proxy)
-}
-
-pub(crate) fn prepare_request_body(body: &[u8]) -> Result<(Vec<u8>, bool), OpenAiProxyError> {
-    let mut value =
-        serde_json::from_slice::<Value>(body).map_err(OpenAiProxyError::InvalidRequestBody)?;
-    let streaming = value.get("stream").and_then(Value::as_bool) == Some(true);
-
-    if !streaming {
-        return Ok((body.to_vec(), false));
-    }
-
-    let object = value
-        .as_object_mut()
-        .ok_or(OpenAiProxyError::InvalidRequestObject)?;
-    let stream_options = object
-        .entry("stream_options")
-        .or_insert_with(|| Value::Object(Map::new()));
-
-    if stream_options.is_null() {
-        *stream_options = Value::Object(Map::new());
-    }
-
-    stream_options
-        .as_object_mut()
-        .ok_or(OpenAiProxyError::InvalidStreamOptions)?
-        .insert("include_usage".to_string(), Value::Bool(true));
-
-    serde_json::to_vec(&value)
-        .map(|body| (body, true))
-        .map_err(OpenAiProxyError::RequestBodySerializationFailed)
 }
 
 fn should_forward_openai_request_header(
@@ -284,7 +255,7 @@ async fn record_openai_usage(
     token_usage_checker
         .record_tokens(engineer, usage.total_tokens)
         .await
-        .map_err(OpenAiProxyError::TokenUsageRecordFailed)
+        .map_err(OpenAiProxyError::TokenUsageRecord)
 }
 
 fn usage_recording_stream(
@@ -552,9 +523,7 @@ impl IntoResponse for OpenAiRouteError {
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many active streams".to_string(),
             ),
-            Self::Proxy(OpenAiProxyError::InvalidRequestBody(_))
-            | Self::Proxy(OpenAiProxyError::InvalidRequestObject)
-            | Self::Proxy(OpenAiProxyError::InvalidStreamOptions) => {
+            Self::Proxy(OpenAiProxyError::RequestTransform(error)) if error.is_client_error() => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }
             Self::Proxy(_) => {
@@ -592,42 +561,26 @@ impl Error for OpenAiRouteError {
 }
 
 #[derive(Debug)]
-pub enum OpenAiProxyError {
-    InvalidRequestBody(serde_json::Error),
-    InvalidRequestObject,
-    InvalidStreamOptions,
-    ProviderRequestFailed(reqwest::Error),
-    RequestBodyReadFailed(axum::Error),
-    RequestBodySerializationFailed(serde_json::Error),
-    ResponseBuildFailed(axum::http::Error),
-    TokenUsageRecordFailed(TokenUsageError),
+enum OpenAiProxyError {
+    ProviderRequest(reqwest::Error),
+    RequestTransform(OpenAiRequestTransformError),
+    ResponseBuild(axum::http::Error),
+    TokenUsageRecord(TokenUsageError),
 }
 
 impl Display for OpenAiProxyError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidRequestBody(error) => {
-                write!(formatter, "invalid OpenAI JSON request: {error}")
-            }
-            Self::InvalidRequestObject => {
-                write!(formatter, "OpenAI request body must be a JSON object")
-            }
-            Self::InvalidStreamOptions => {
-                write!(formatter, "OpenAI stream_options must be a JSON object")
-            }
-            Self::ProviderRequestFailed(error) => {
+            Self::ProviderRequest(error) => {
                 write!(formatter, "failed to call OpenAI: {error}")
             }
-            Self::RequestBodyReadFailed(error) => {
-                write!(formatter, "failed to read OpenAI request body: {error}")
+            Self::RequestTransform(error) => {
+                write!(formatter, "failed to transform OpenAI request: {error}")
             }
-            Self::RequestBodySerializationFailed(error) => {
-                write!(formatter, "failed to serialize OpenAI request: {error}")
-            }
-            Self::ResponseBuildFailed(error) => {
+            Self::ResponseBuild(error) => {
                 write!(formatter, "failed to build OpenAI response: {error}")
             }
-            Self::TokenUsageRecordFailed(error) => {
+            Self::TokenUsageRecord(error) => {
                 write!(formatter, "failed to record OpenAI token usage: {error}")
             }
         }
@@ -637,13 +590,10 @@ impl Display for OpenAiProxyError {
 impl Error for OpenAiProxyError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::InvalidRequestBody(error) => Some(error),
-            Self::ProviderRequestFailed(error) => Some(error),
-            Self::RequestBodyReadFailed(error) => Some(error),
-            Self::RequestBodySerializationFailed(error) => Some(error),
-            Self::ResponseBuildFailed(error) => Some(error),
-            Self::TokenUsageRecordFailed(error) => Some(error),
-            Self::InvalidRequestObject | Self::InvalidStreamOptions => None,
+            Self::ProviderRequest(error) => Some(error),
+            Self::RequestTransform(error) => Some(error),
+            Self::ResponseBuild(error) => Some(error),
+            Self::TokenUsageRecord(error) => Some(error),
         }
     }
 }
