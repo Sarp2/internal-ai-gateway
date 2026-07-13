@@ -1,0 +1,30 @@
+services/proxy/src/sse_test.rs
+  s_c26b496cd2589a::t_7923faeb0cd890 32-39
+  s_c26b496cd2589a::t_563839b5b2e8ed 1-31
+services/proxy/src/openai.rs
+  s_c26b496cd2589a::t_563839b5b2e8ed 29,313,381
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_563839b5b2e8ed 39,65
+  s_c26b496cd2589a::t_6c977307b3117c 66
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_563839b5b2e8ed 28,350
+services/proxy/src/sse.rs
+  s_c26b496cd2589a::t_404c1b8811279b 22
+  s_c26b496cd2589a::t_563839b5b2e8ed 1-21,23-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "e45ac67ecdcdf6b78f23a9a6f3c69b37928b0765",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
