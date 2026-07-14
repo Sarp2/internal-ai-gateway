@@ -1,0 +1,102 @@
+services/proxy/src/anthropic_test.rs
+  s_c26b496cd2589a::t_7d440c3ab61b70 1-5,8,13,15-20,257-324
+  s_c26b496cd2589a::t_a88976eb4c71be 325
+infra/lib/ecs-stack.ts
+  s_c26b496cd2589a::t_1642a5ae2a809e 43,69,147-148,204
+services/proxy/src/token_reservation.rs
+  s_c26b496cd2589a::t_24af74fbda6a32 733
+  s_c26b496cd2589a::t_12f6eaca6dd4a4 287-289,292-295,332,335,338-339,345-346,356,360,389,419-422
+  s_c26b496cd2589a::t_e0c84b9d6111ea 41,49,55,69,75,168,273,275,277-286,290-291,296-303,305,307-322,324-331,333-334,385-388,390-418,423-451,453-458,460-462,465-470,473,523-549,636,639,645,651-675,694,696-697,715-721
+  s_c26b496cd2589a::t_ce60f143149faa 625
+  s_c26b496cd2589a::t_be4db1fc460b98 14
+  s_c26b496cd2589a::t_1d90101778812b 46,323,695
+  s_c26b496cd2589a::t_cda7cb37d96df2 173-176
+  s_c26b496cd2589a::t_d770885fd3939a 351
+  s_c26b496cd2589a::t_7f0b1043fa69da 550,598-607
+  s_c26b496cd2589a::t_7853bb0228e665 551
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_d770885fd3939a 117-118,253,269-272,294-297,299-301
+  s_c26b496cd2589a::t_c433cf6129b73c 590
+  s_c26b496cd2589a::t_22b03fe641a95e 27,65,131,174,202
+  s_c26b496cd2589a::t_7d440c3ab61b70 676-683,685
+  s_c26b496cd2589a::t_c4c30cba49033f 684
+  s_c26b496cd2589a::t_932dc82a3ef79a 99
+  s_c26b496cd2589a::t_85b622234b210d 21,24,32,36-38,64,69-76,89-97,108-116,119-120,130,173,200-201,204-216,218-221,223-228,230,233-242,248,257,273-281,291,305-306,530-534,537,544-553,592,594,603-605,609-610,620,622
+services/proxy/src/token_reconciliation.rs
+  s_c26b496cd2589a::t_04856ee94ea492 141-144,162-165,192-195,198-201,204-207,210-213
+  s_c26b496cd2589a::t_85a349ab89b133 57,65,81,93,176-177,180,183,191,197,203,209,222-225
+  s_c26b496cd2589a::t_d770885fd3939a 147
+  s_c26b496cd2589a::t_897992889dfdfd 1-56,58-64,66-79,82-92,94-140,145-146,148-161,166-175,178-179,181-182,184-190,196,202,208,214-221,226-228
+  s_c26b496cd2589a::t_a64fba143e78cc 80
+infra/bin/app.ts
+  s_c26b496cd2589a::t_1642a5ae2a809e 7,29
+  s_c26b496cd2589a::t_7824d64f292020 18
+services/proxy/src/anthropic_request.rs
+  s_c26b496cd2589a::t_9483f6b9bbb306 38-44
+  s_c26b496cd2589a::t_ee27084c9b3bc1 48,81,116,360
+  s_c26b496cd2589a::t_10aefb8ff8cb70 1-37,45-47,49-80,82-115,117-327,337,341-359,366
+  s_c26b496cd2589a::t_d770885fd3939a 328-336,338-340,361-365
+infra/lib/ecs-stack.test.ts
+  s_c26b496cd2589a::t_7c47485a2251e3 526-532,534-552
+  s_c26b496cd2589a::t_72ac9c74af3521 123
+  s_c26b496cd2589a::t_ef0b89c41dfe87 533
+  s_c26b496cd2589a::t_1642a5ae2a809e 9,122,679,693
+  s_c26b496cd2589a::t_7d45d3a17a309b 124-125
+services/proxy/src/openai_test.rs
+  s_c26b496cd2589a::t_318f842619af5e 18,187-194
+services/proxy/src/token_reconciliation_test.rs
+  s_c26b496cd2589a::t_897992889dfdfd 1-15,18-33,36-38
+  s_c26b496cd2589a::t_24af74fbda6a32 16-17,34-35
+infra/lib/reconciliation-stack.test.ts
+  s_c26b496cd2589a::t_1642a5ae2a809e 1-17,19-23,25-79
+  s_c26b496cd2589a::t_72ac9c74af3521 18,24
+services/proxy/Cargo.toml
+  s_c26b496cd2589a::t_897992889dfdfd 11,18
+infra/lib/reconciliation-stack.ts
+  s_c26b496cd2589a::t_7824d64f292020 2,43-45
+  s_c26b496cd2589a::t_1642a5ae2a809e 1,3-42,46-60
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_04856ee94ea492 28,98-101
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_d0ab7a5eb95c06 1,7,20,99-113,115-122,124-131,133-162,253-304
+  s_c26b496cd2589a::t_d770885fd3939a 114,123,132
+  s_c26b496cd2589a::t_694be5256455a5 305
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_04856ee94ea492 23-25,50,71-74,96-98
+  s_c26b496cd2589a::t_a7a1ba9f81de0a 171-173
+  s_c26b496cd2589a::t_d56d932f990e6c 127-129
+  s_c26b496cd2589a::t_c24ccc8c67a1e1 22
+services/proxy/src/app_test.rs
+  s_c26b496cd2589a::t_318f842619af5e 90-95
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_85b622234b210d 28,50
+  s_c26b496cd2589a::t_897992889dfdfd 8,45,74
+  s_c26b496cd2589a::t_04856ee94ea492 49,75,115-116,121
+services/proxy/src/background_tasks.rs
+  s_c26b496cd2589a::t_04856ee94ea492 11,27-29,32
+  s_c26b496cd2589a::t_897992889dfdfd 4,30
+services/proxy/src/token_accounting.rs
+  s_c26b496cd2589a::t_7c3d8bb939ddf8 68
+  s_c26b496cd2589a::t_cda7cb37d96df2 4-5,7-11,22-27,29-30,38,55-67,69-82
+services/proxy/src/anthropic_request_test.rs
+  s_c26b496cd2589a::t_d770885fd3939a 29
+  s_c26b496cd2589a::t_d9ecb62d11e0dd 1-28,30-41
+services/proxy/Cargo.lock
+  s_c26b496cd2589a::t_80baf49b77715a 211-235,1681,1688
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "2cf8bb1da3d9fa198e9658ec6ea63630c34f948e",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
