@@ -1,0 +1,39 @@
+services/proxy/src/anthropic_request.rs
+  s_c26b496cd2589a::t_81febe314725d1 214
+  s_c26b496cd2589a::t_f015e5e6cff758 35-40,43,216,398-407
+  s_c26b496cd2589a::t_f0d4ed42cc4ceb 9,16,18,217-232,246-248,279,349-351
+  s_c26b496cd2589a::t_c08424a05d62ab 34,352
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_f0d4ed42cc4ceb 558-561
+  s_c26b496cd2589a::t_986be83b391ca6 557
+services/proxy/src/openai_request.rs
+  s_c26b496cd2589a::t_81febe314725d1 41-42,167
+  s_c26b496cd2589a::t_f015e5e6cff758 43-48,52,169,757-766
+  s_c26b496cd2589a::t_f0d4ed42cc4ceb 11,21,23,170-184,199-201,458,682-683
+  s_c26b496cd2589a::t_468162a2b3d688 684-688
+  s_c26b496cd2589a::t_dc6859464d3833 40
+  s_c26b496cd2589a::t_d496c12bb51259 689
+services/proxy/src/openai.rs
+  s_c26b496cd2589a::t_43a85be8d7ad06 493
+  s_c26b496cd2589a::t_f0d4ed42cc4ceb 494-495
+services/proxy/src/anthropic_request_test.rs
+  s_c26b496cd2589a::t_61e0dfc2ccf4f9 1-18
+services/proxy/src/openai_request_test.rs
+  s_c26b496cd2589a::t_61e0dfc2ccf4f9 2,4-5,8-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "306b73008feb647a96a0d403d96a4461b3edde51",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
