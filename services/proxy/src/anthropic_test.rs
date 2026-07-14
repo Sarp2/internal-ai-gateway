@@ -9,7 +9,7 @@ use futures_util::{StreamExt, stream};
 
 use crate::anthropic::{
     AnthropicStreamUsage, AnthropicUsage, ConnectionHeaderNames, anthropic_usage_from_json_slice,
-    should_forward_request_header, should_forward_response_header, test_header,
+    completed_tokens, should_forward_request_header, should_forward_response_header, test_header,
     test_usage_recording_stream,
 };
 use crate::background_tasks::BackgroundTasks;
@@ -40,6 +40,23 @@ fn strips_internal_and_hop_by_hop_request_headers() {
         &TRANSFER_ENCODING,
         &connection_headers
     ));
+}
+
+#[test]
+fn reconciles_completed_client_errors_as_zero_usage() {
+    let body = br#"{"type":"error","error":{"type":"rate_limit_error"}}"#;
+
+    for status in [400, 401, 403, 429] {
+        assert_eq!(completed_tokens(status, body), Some(0));
+    }
+}
+
+#[test]
+fn keeps_server_errors_without_usage_indeterminate() {
+    assert_eq!(
+        completed_tokens(500, br#"{"type":"error","error":{"type":"api_error"}}"#),
+        None
+    );
 }
 
 #[test]

@@ -97,6 +97,7 @@ impl AnthropicProxy {
         };
 
         let is_streaming_response = streaming_request && provider_response.status().is_success();
+        let provider_status = provider_response.status();
         let mut response_builder = Response::builder().status(
             StatusCode::from_u16(provider_response.status().as_u16())
                 .unwrap_or(StatusCode::BAD_GATEWAY),
@@ -114,8 +115,7 @@ impl AnthropicProxy {
                     return Err(AnthropicProxyError::ProviderRequestFailed(error));
                 }
             };
-            let actual_tokens =
-                anthropic_usage_from_json_slice(&body).map(|usage| usage.total_tokens());
+            let actual_tokens = completed_response_tokens(provider_status, &body);
             if let Err(error) = reservation.reconcile(actual_tokens).await {
                 warn!(%error, "failed to reconcile non-streaming Anthropic token usage");
             }
@@ -182,6 +182,14 @@ pub(crate) fn anthropic_usage_from_json_slice(body: &[u8]) -> Option<AnthropicUs
     let value = serde_json::from_slice::<Value>(body).ok()?;
 
     anthropic_usage_from_json_value(value.get("usage")?)
+}
+
+fn completed_response_tokens(status: reqwest::StatusCode, body: &[u8]) -> Option<u64> {
+    if status.is_client_error() {
+        return Some(0);
+    }
+
+    anthropic_usage_from_json_slice(body).map(|usage| usage.total_tokens())
 }
 
 fn anthropic_usage_from_json_value(value: &Value) -> Option<AnthropicUsage> {
@@ -672,6 +680,14 @@ pub(crate) fn test_proxy(api_key: &str) -> AnthropicProxy {
 #[cfg(test)]
 pub(crate) fn test_header(value: &'static str) -> HeaderName {
     HeaderName::from_static(value)
+}
+
+#[cfg(test)]
+pub(crate) fn completed_tokens(status: u16, body: &[u8]) -> Option<u64> {
+    completed_response_tokens(
+        reqwest::StatusCode::from_u16(status).expect("test status should be valid"),
+        body,
+    )
 }
 
 #[cfg(test)]

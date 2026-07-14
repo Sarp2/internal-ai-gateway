@@ -11,8 +11,9 @@ use futures_util::{StreamExt, stream};
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai::{
-    OpenAiStreamUsage, OpenAiUsage, forwards_request_header, openai_usage_from_json_slice,
-    request_headers_recomputed_by_client, streams_provider_response, test_usage_recording_stream,
+    OpenAiStreamUsage, OpenAiUsage, completed_tokens, forwards_request_header,
+    openai_usage_from_json_slice, request_headers_recomputed_by_client, streams_provider_response,
+    test_usage_recording_stream,
 };
 use crate::streams::ActiveStreamTracker;
 use crate::token_reconciliation::TokenReconciliationQueue;
@@ -47,6 +48,23 @@ fn strips_provider_billing_scope_headers() {
         &HeaderName::from_static("openai-project"),
         &headers
     ));
+}
+
+#[test]
+fn reconciles_completed_client_errors_as_zero_usage() {
+    let body = br#"{"error":{"message":"rate limited"}}"#;
+
+    for status in [400, 401, 403, 429] {
+        assert_eq!(completed_tokens(status, body), Some(0));
+    }
+}
+
+#[test]
+fn keeps_server_errors_without_usage_indeterminate() {
+    assert_eq!(
+        completed_tokens(500, br#"{"error":{"message":"internal error"}}"#),
+        None
+    );
 }
 
 #[test]

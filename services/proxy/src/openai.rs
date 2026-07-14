@@ -102,6 +102,7 @@ impl OpenAiProxy {
 
         let is_streaming_response =
             should_stream_provider_response(streaming_request, provider_response.status());
+        let provider_status = provider_response.status();
 
         let mut response_builder = Response::builder().status(
             StatusCode::from_u16(provider_response.status().as_u16())
@@ -121,7 +122,7 @@ impl OpenAiProxy {
                 }
             };
 
-            let actual_tokens = openai_usage_from_json_slice(&body).map(|usage| usage.total_tokens);
+            let actual_tokens = completed_response_tokens(provider_status, &body);
 
             if let Err(error) = reservation.reconcile(actual_tokens).await {
                 warn!(%error, "failed to reconcile non-streaming OpenAI token usage");
@@ -202,6 +203,14 @@ fn should_forward_openai_request_header(
 
 fn should_stream_provider_response(streaming_request: bool, status: StatusCode) -> bool {
     streaming_request && status.is_success()
+}
+
+fn completed_response_tokens(status: reqwest::StatusCode, body: &[u8]) -> Option<u64> {
+    if status.is_client_error() {
+        return Some(0);
+    }
+
+    openai_usage_from_json_slice(body).map(|usage| usage.total_tokens)
 }
 
 fn copy_response_headers(provider_headers: &HeaderMap, response_headers: Option<&mut HeaderMap>) {
@@ -605,6 +614,14 @@ pub(crate) fn request_headers_recomputed_by_client() -> [HeaderName; 2] {
 #[cfg(test)]
 pub(crate) fn streams_provider_response(streaming_request: bool, status: StatusCode) -> bool {
     should_stream_provider_response(streaming_request, status)
+}
+
+#[cfg(test)]
+pub(crate) fn completed_tokens(status: u16, body: &[u8]) -> Option<u64> {
+    completed_response_tokens(
+        reqwest::StatusCode::from_u16(status).expect("test status should be valid"),
+        body,
+    )
 }
 
 #[cfg(test)]
