@@ -1,12 +1,14 @@
 use std::future::Future;
 
 use tokio::time::{Duration, timeout};
+use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Default)]
 pub struct BackgroundTasks {
+    cancellation: CancellationToken,
     tracker: TaskTracker,
 }
 
@@ -22,7 +24,12 @@ impl BackgroundTasks {
         self.tracker.spawn(task);
     }
 
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation.clone()
+    }
+
     pub async fn shutdown(&self) {
+        self.cancellation.cancel();
         self.tracker.close();
 
         if timeout(SHUTDOWN_TIMEOUT, self.tracker.wait())

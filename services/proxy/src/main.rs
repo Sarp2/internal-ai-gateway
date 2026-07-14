@@ -5,6 +5,7 @@ use aws_config::BehaviorVersion;
 use aws_sdk_cloudwatch::Client as CloudWatchClient;
 use aws_sdk_dynamodb::Client as DynamoDbClient;
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
+use aws_sdk_sqs::Client as SqsClient;
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -24,6 +25,7 @@ use crate::telemetry::init_tracing;
 use crate::token_accounting::TokenAccounting;
 
 pub mod anthropic;
+mod anthropic_request;
 pub mod api_key;
 mod app;
 pub mod auth;
@@ -40,9 +42,12 @@ mod sse;
 pub mod streams;
 mod telemetry;
 mod token_accounting;
+mod token_reconciliation;
 mod token_reservation;
 pub mod token_usage;
 
+#[cfg(test)]
+mod anthropic_request_test;
 #[cfg(test)]
 mod anthropic_test;
 #[cfg(test)]
@@ -65,6 +70,8 @@ mod rate_limit_test;
 mod sse_test;
 #[cfg(test)]
 mod streams_test;
+#[cfg(test)]
+mod token_reconciliation_test;
 #[cfg(test)]
 mod token_reservation_test;
 #[cfg(test)]
@@ -105,10 +112,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
     let token_accounting = TokenAccounting::new(
         DynamoDbClient::new(&aws_config),
+        SqsClient::new(&aws_config),
+        config.token_reconciliation_queue_url.clone(),
         config.token_usage_table_name.clone(),
     );
     let stream_tracker = Arc::new(ActiveStreamTracker::new(config.max_active_streams));
     let background_tasks = BackgroundTasks::new();
+    token_accounting.start_reconciliation_worker(&background_tasks);
     start_active_stream_metric_publisher(
         Arc::clone(&stream_tracker),
         config.metric_interval,

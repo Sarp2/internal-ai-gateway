@@ -15,6 +15,7 @@ use crate::openai::{
     request_headers_recomputed_by_client, streams_provider_response, test_usage_recording_stream,
 };
 use crate::streams::ActiveStreamTracker;
+use crate::token_reconciliation::TokenReconciliationQueue;
 use crate::token_reservation::TokenReservationManager;
 use crate::token_usage::TokenUsageChecker;
 
@@ -183,6 +184,14 @@ async fn drains_provider_stream_after_downstream_disconnects() {
                 .build(),
         ),
         "token-usage",
+        TokenReconciliationQueue::new(
+            aws_sdk_sqs::Client::from_conf(
+                aws_sdk_sqs::Config::builder()
+                    .behavior_version(BehaviorVersion::latest())
+                    .build(),
+            ),
+            "https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation",
+        ),
         Arc::clone(&token_usage_checker),
     ));
     let reservation = token_reservation_manager

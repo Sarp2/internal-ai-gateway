@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aws_sdk_dynamodb::Client as DynamoDbClient;
-use aws_sdk_dynamodb::types::{AttributeValue, TransactWriteItem, Update};
+use aws_sdk_dynamodb::types::{AttributeValue, Put, TransactWriteItem, Update};
 
 use crate::engineer_auth::AuthenticatedEngineer;
 
@@ -16,6 +17,7 @@ const WEEKLY_WINDOW_PREFIX: &str = "weekly";
 const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
+const RECONCILIATION_RECORD_PREFIX: &str = "reconciliation";
 
 #[derive(Clone)]
 pub struct TokenUsageChecker {
@@ -92,6 +94,70 @@ impl TokenUsageChecker {
     ) -> Result<(), TokenUsageError> {
         self.record_tokens_with_limit(engineer, token_count, false)
             .await
+    }
+
+    pub(crate) async fn record_reconciliation(
+        &self,
+        job_id: &str,
+        user_id: &str,
+        token_count: u64,
+        occurred_at: u64,
+    ) -> Result<(), TokenUsageError> {
+        if token_count == 0 {
+            return Ok(());
+        }
+
+        let daily_window_start = daily_usage_window_start(occurred_at);
+        let weekly_window_start = weekly_usage_window_start(occurred_at);
+        let reconciliation_window = format!("{RECONCILIATION_RECORD_PREFIX}#{job_id}");
+        let ttl = token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS);
+
+        let daily_update = self.usage_update(
+            user_id,
+            &daily_usage_window(occurred_at),
+            token_count,
+            None,
+            token_usage_ttl_epoch_seconds(daily_window_start, DAILY_WINDOW_SECONDS),
+            TokenUsageError::DailyLimitExceeded,
+        )?;
+
+        let weekly_update = self.usage_update(
+            user_id,
+            &weekly_usage_window(occurred_at),
+            token_count,
+            None,
+            ttl,
+            TokenUsageError::WeeklyLimitExceeded,
+        )?;
+
+        let marker = self.reconciliation_marker(user_id, &reconciliation_window, ttl)?;
+
+        let result = self
+            .dynamodb_client
+            .transact_write_items()
+            .client_request_token(job_id)
+            .transact_items(TransactWriteItem::builder().update(daily_update).build())
+            .transact_items(TransactWriteItem::builder().update(weekly_update).build())
+            .transact_items(TransactWriteItem::builder().put(marker).build())
+            .send()
+            .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(source)
+                if source
+                    .as_service_error()
+                    .is_some_and(|error| error.is_transaction_canceled_exception())
+                    && self
+                        .reconciliation_marker_exists(user_id, &reconciliation_window)
+                        .await? =>
+            {
+                Ok(())
+            }
+            Err(source) => Err(TokenUsageError::WriteFailed {
+                source: Box::new(source),
+            }),
+        }
     }
 
     async fn record_tokens_with_limit(
@@ -182,6 +248,59 @@ impl TokenUsageChecker {
             .map(token_count_from_attribute)
             .transpose()
             .map(|tokens| tokens.unwrap_or(0))
+    }
+
+    async fn reconciliation_marker_exists(
+        &self,
+        user_id: &str,
+        reconciliation_window: &str,
+    ) -> Result<bool, TokenUsageError> {
+        self.dynamodb_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key(USER_ID_ATTRIBUTE, AttributeValue::S(user_id.to_string()))
+            .key(
+                USAGE_WINDOW_ATTRIBUTE,
+                AttributeValue::S(reconciliation_window.to_string()),
+            )
+            .consistent_read(true)
+            .send()
+            .await
+            .map(|output| output.item.is_some())
+            .map_err(|source| TokenUsageError::ReadFailed {
+                source: Box::new(source),
+            })
+    }
+
+    fn reconciliation_marker(
+        &self,
+        user_id: &str,
+        reconciliation_window: &str,
+        ttl: u64,
+    ) -> Result<Put, TokenUsageError> {
+        Put::builder()
+            .table_name(&self.table_name)
+            .set_item(Some(HashMap::from([
+                (
+                    USER_ID_ATTRIBUTE.to_string(),
+                    AttributeValue::S(user_id.to_string()),
+                ),
+                (
+                    USAGE_WINDOW_ATTRIBUTE.to_string(),
+                    AttributeValue::S(reconciliation_window.to_string()),
+                ),
+                (
+                    "record_type".to_string(),
+                    AttributeValue::S("usage_reconciliation".to_string()),
+                ),
+                ("ttl".to_string(), AttributeValue::N(ttl.to_string())),
+            ])))
+            .condition_expression("attribute_not_exists(#usage_window)")
+            .expression_attribute_names("#usage_window", USAGE_WINDOW_ATTRIBUTE)
+            .build()
+            .map_err(|source| TokenUsageError::BuildWriteFailed {
+                source: Box::new(source),
+            })
     }
 
     fn usage_update(

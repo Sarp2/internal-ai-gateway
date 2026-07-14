@@ -25,6 +25,7 @@ pub struct ProxyConfig {
     pub rate_limit_table_name: String,
     pub rate_limit_window: Duration,
     pub token_usage_table_name: String,
+    pub token_reconciliation_queue_url: String,
 }
 
 impl ProxyConfig {
@@ -93,6 +94,10 @@ impl ProxyConfig {
             token_usage_table_name: required_value(
                 read_value("TOKEN_USAGE_TABLE_NAME"),
                 "TOKEN_USAGE_TABLE_NAME",
+            )?,
+            token_reconciliation_queue_url: required_value(
+                read_value("TOKEN_RECONCILIATION_QUEUE_URL"),
+                "TOKEN_RECONCILIATION_QUEUE_URL",
             )?,
         })
     }

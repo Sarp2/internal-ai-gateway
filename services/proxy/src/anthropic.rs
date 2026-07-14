@@ -7,7 +7,6 @@ use aws_sdk_secretsmanager::Client as SecretsManagerClient;
 use axum::body::Body;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::header::CONTENT_TYPE;
 use axum::http::header::{
     CONNECTION, CONTENT_LENGTH, HOST, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE, TRAILER,
     TRANSFER_ENCODING, UPGRADE,
@@ -19,18 +18,24 @@ use futures_util::{Stream, StreamExt};
 use reqwest::Client as HttpClient;
 use reqwest::redirect::Policy;
 use serde_json::{Value, json};
+use tokio::sync::mpsc;
 use tracing::{error, warn};
 
+use crate::anthropic_request::{AnthropicRequestError, prepare_anthropic_request};
 use crate::app::AppState;
 use crate::auth::AuthError;
+use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::rate_limit::RateLimitError;
 use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
-use crate::token_usage::{TokenUsageChecker, TokenUsageError};
+use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
 const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const INTERNAL_API_KEY_HEADER: &str = "x-api-key";
+const STREAM_CHANNEL_CAPACITY: usize = 8;
+
+type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct AnthropicProxy {
@@ -56,10 +61,19 @@ impl AnthropicProxy {
         &self,
         request: Request<Body>,
         engineer: AuthenticatedEngineer,
-        token_usage_checker: Arc<TokenUsageChecker>,
+        token_reservation_manager: Arc<TokenReservationManager>,
+        background_tasks: BackgroundTasks,
         stream_guard: OwnedActiveStreamGuard,
     ) -> Result<Response<Body>, AnthropicProxyError> {
         let (parts, body) = request.into_parts();
+        let prepared_request = prepare_anthropic_request(body)
+            .await
+            .map_err(AnthropicProxyError::RequestPreparation)?;
+        let (provider_body, streaming_request, token_budget) = prepared_request.into_parts();
+        let reservation = token_reservation_manager
+            .reserve(engineer, token_budget)
+            .await
+            .map_err(AnthropicProxyError::TokenReservation)?;
         let request_connection_headers = ConnectionHeaderNames::from_headers(&parts.headers);
         let mut provider_request = self
             .http_client
@@ -72,13 +86,17 @@ impl AnthropicProxy {
             }
         }
 
-        let provider_response = provider_request
-            .body(reqwest::Body::wrap_stream(body.into_data_stream()))
-            .send()
-            .await
-            .map_err(AnthropicProxyError::ProviderRequestFailed)?;
+        let provider_response = match provider_request.body(provider_body).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                if let Err(reconciliation_error) = reservation.reconcile(None).await {
+                    warn!(%reconciliation_error, "failed to finalize Anthropic reservation after provider failure");
+                }
+                return Err(AnthropicProxyError::ProviderRequestFailed(error));
+            }
+        };
 
-        let is_streaming_response = is_event_stream_response(provider_response.headers());
+        let is_streaming_response = streaming_request && provider_response.status().is_success();
         let mut response_builder = Response::builder().status(
             StatusCode::from_u16(provider_response.status().as_u16())
                 .unwrap_or(StatusCode::BAD_GATEWAY),
@@ -87,14 +105,19 @@ impl AnthropicProxy {
         copy_response_headers(provider_response.headers(), response_builder.headers_mut());
 
         if !is_streaming_response {
-            let body = provider_response
-                .bytes()
-                .await
-                .map_err(AnthropicProxyError::ProviderRequestFailed)?;
-            if let Err(error) =
-                record_usage_from_json_body(&token_usage_checker, &engineer, &body).await
-            {
-                warn!(%error, "failed to record non-streaming Anthropic token usage");
+            let body = match provider_response.bytes().await {
+                Ok(body) => body,
+                Err(error) => {
+                    if let Err(reconciliation_error) = reservation.reconcile(None).await {
+                        warn!(%reconciliation_error, "failed to finalize Anthropic reservation after response failure");
+                    }
+                    return Err(AnthropicProxyError::ProviderRequestFailed(error));
+                }
+            };
+            let actual_tokens =
+                anthropic_usage_from_json_slice(&body).map(|usage| usage.total_tokens());
+            if let Err(error) = reservation.reconcile(actual_tokens).await {
+                warn!(%error, "failed to reconcile non-streaming Anthropic token usage");
             }
 
             return response_builder
@@ -104,8 +127,8 @@ impl AnthropicProxy {
 
         let stream = usage_recording_stream(
             provider_response.bytes_stream(),
-            token_usage_checker,
-            engineer,
+            reservation,
+            background_tasks,
             stream_guard,
         );
 
@@ -138,52 +161,21 @@ async fn handle_messages(
         .await
         .map_err(AnthropicRouteError::RateLimit)?;
 
-    state
-        .token_accounting
-        .usage_checker()
-        .check_limits(&engineer)
-        .await
-        .map_err(AnthropicRouteError::TokenUsage)?;
-
     let stream_guard = state
         .stream_tracker
         .try_start_owned()
         .ok_or(AnthropicRouteError::TooManyActiveStreams)?;
-
     state
         .anthropic_proxy
         .forward_messages(
             request,
             engineer,
-            state.token_accounting.usage_checker(),
+            state.token_accounting.reservation_manager(),
+            state.background_tasks.clone(),
             stream_guard,
         )
         .await
         .map_err(AnthropicRouteError::Proxy)
-}
-
-fn is_event_stream_response(headers: &HeaderMap) -> bool {
-    headers
-        .get(CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.to_ascii_lowercase().starts_with("text/event-stream"))
-}
-
-async fn record_anthropic_usage(
-    token_usage_checker: &TokenUsageChecker,
-    engineer: &AuthenticatedEngineer,
-    usage: AnthropicUsage,
-) -> Result<(), AnthropicProxyError> {
-    let token_count = usage.total_tokens();
-
-    if token_count == 0 {
-        return Ok(());
-    }
-
-    token_usage_checker
-        .record_tokens(engineer, token_count)
-        .await
-        .map_err(AnthropicProxyError::TokenUsageRecordFailed)
 }
 
 pub(crate) fn anthropic_usage_from_json_slice(body: &[u8]) -> Option<AnthropicUsage> {
@@ -204,70 +196,65 @@ fn anthropic_usage_from_json_value(value: &Value) -> Option<AnthropicUsage> {
     .filter(AnthropicUsage::has_usage)
 }
 
-async fn record_usage_from_json_body(
-    token_usage_checker: &TokenUsageChecker,
-    engineer: &AuthenticatedEngineer,
-    body: &Bytes,
-) -> Result<(), AnthropicProxyError> {
-    let Some(usage) = anthropic_usage_from_json_slice(body) else {
-        warn!("Anthropic response did not include token usage");
-        return Ok(());
-    };
-
-    record_anthropic_usage(token_usage_checker, engineer, usage).await
-}
-
 fn usage_recording_stream(
-    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin,
-    token_usage_checker: Arc<TokenUsageChecker>,
-    engineer: AuthenticatedEngineer,
+    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
+    reservation: TokenReservation,
+    background_tasks: BackgroundTasks,
     stream_guard: OwnedActiveStreamGuard,
-) -> impl Stream<Item = Result<Bytes, Box<dyn Error + Send + Sync>>> {
-    stream::unfold(
-        (
-            provider_stream,
-            AnthropicStreamUsageRecorder::new(token_usage_checker, engineer),
-            Some(stream_guard),
-        ),
-        |(mut provider_stream, mut usage_recorder, stream_guard)| async move {
-            match provider_stream.next().await {
-                Some(Ok(chunk)) => {
+) -> impl Stream<Item = ProxyStreamItem> {
+    let (sender, receiver) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
+    let engineer_id = reservation.engineer_id().to_string();
+
+    background_tasks.spawn(async move {
+        let mut provider_stream = provider_stream;
+        let mut usage_recorder = AnthropicStreamUsageRecorder::new(reservation);
+        let mut downstream_connected = true;
+        let _stream_guard = stream_guard;
+
+        while let Some(provider_result) = provider_stream.next().await {
+            match provider_result {
+                Ok(chunk) => {
                     usage_recorder.observe_chunk(&chunk);
-
-                    Some((Ok(chunk), (provider_stream, usage_recorder, stream_guard)))
-                }
-                Some(Err(error)) => Some((
-                    Err(Box::new(error) as Box<dyn Error + Send + Sync>),
-                    (provider_stream, usage_recorder, stream_guard),
-                )),
-                None => {
-                    if let Err(error) = usage_recorder.record_observed_usage().await {
-                        warn!(%error, "failed to record Anthropic streaming token usage");
+                    if downstream_connected && sender.send(Ok(chunk)).await.is_err() {
+                        downstream_connected = false;
+                        warn!(%engineer_id, "Anthropic client disconnected; continuing provider drain");
                     }
-
-                    drop(stream_guard);
-                    None
+                }
+                Err(error) => {
+                    warn!(%engineer_id, %error, "Anthropic provider stream failed");
+                    if downstream_connected {
+                        let _ = sender
+                            .send(Err(Box::new(error) as Box<dyn Error + Send + Sync>))
+                            .await;
+                    }
+                    break;
                 }
             }
-        },
-    )
+        }
+
+        if let Err(error) = usage_recorder.record_observed_usage().await {
+            warn!(%engineer_id, %error, "failed to reconcile Anthropic streaming token usage");
+        }
+    });
+
+    stream::unfold(receiver, |mut receiver| async move {
+        receiver.recv().await.map(|item| (item, receiver))
+    })
 }
 
 struct AnthropicStreamUsageRecorder {
     buffered_event: Vec<u8>,
-    engineer: AuthenticatedEngineer,
     recording_attempted: bool,
-    token_usage_checker: Arc<TokenUsageChecker>,
+    reservation: Option<TokenReservation>,
     usage: AnthropicStreamUsage,
 }
 
 impl AnthropicStreamUsageRecorder {
-    fn new(token_usage_checker: Arc<TokenUsageChecker>, engineer: AuthenticatedEngineer) -> Self {
+    fn new(reservation: TokenReservation) -> Self {
         Self {
             buffered_event: Vec::new(),
-            engineer,
             recording_attempted: false,
-            token_usage_checker,
+            reservation: Some(reservation),
             usage: AnthropicStreamUsage::default(),
         }
     }
@@ -279,11 +266,19 @@ impl AnthropicStreamUsageRecorder {
     async fn record_observed_usage(&mut self) -> Result<(), AnthropicProxyError> {
         self.recording_attempted = true;
 
-        let Some(usage) = self.usage.observed_usage() else {
-            return Ok(());
-        };
-
-        record_anthropic_usage(&self.token_usage_checker, &self.engineer, usage).await
+        let actual_tokens = self
+            .usage
+            .observed_usage()
+            .map(|usage| usage.total_tokens());
+        if actual_tokens.is_none() {
+            warn!("Anthropic stream ended without final usage; charging reservation");
+        }
+        self.reservation
+            .take()
+            .expect("Anthropic reservation should only be reconciled once")
+            .reconcile(actual_tokens)
+            .await
+            .map_err(AnthropicProxyError::TokenReservation)
     }
 }
 
@@ -293,22 +288,22 @@ impl Drop for AnthropicStreamUsageRecorder {
             return;
         }
 
-        let Some(usage) = self.usage.observed_usage() else {
+        let Some(reservation) = self.reservation.take() else {
             return;
         };
-
-        let token_usage_checker = Arc::clone(&self.token_usage_checker);
-        let engineer = self.engineer.clone();
-
+        let actual_tokens = self
+            .usage
+            .observed_usage()
+            .map(|usage| usage.total_tokens());
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            warn!("failed to record dropped Anthropic streaming token usage: no Tokio runtime");
+            warn!(
+                "failed to reconcile dropped Anthropic stream: no Tokio runtime; reservation remains charged"
+            );
             return;
         };
-
         handle.spawn(async move {
-            if let Err(error) = record_anthropic_usage(&token_usage_checker, &engineer, usage).await
-            {
-                warn!(%error, "failed to record dropped Anthropic streaming token usage");
+            if let Err(error) = reservation.reconcile(actual_tokens).await {
+                warn!(%error, "failed to reconcile dropped Anthropic streaming token usage");
             }
         });
     }
@@ -502,7 +497,6 @@ pub async fn load_anthropic_proxy(
 enum AnthropicRouteError {
     Auth(AuthError),
     RateLimit(RateLimitError),
-    TokenUsage(TokenUsageError),
     TooManyActiveStreams,
     Proxy(AnthropicProxyError),
 }
@@ -533,22 +527,30 @@ impl IntoResponse for AnthropicRouteError {
                     "rate limit check is temporarily unavailable".to_string(),
                 )
             }
-            Self::TokenUsage(TokenUsageError::DailyLimitExceeded)
-            | Self::TokenUsage(TokenUsageError::WeeklyLimitExceeded)
-            | Self::TokenUsage(TokenUsageError::LimitExceededDuringInputRecording) => {
-                (StatusCode::PAYMENT_REQUIRED, self.to_string())
-            }
-            Self::TokenUsage(_) => {
-                error!(error = %self, "Anthropic token usage check failed");
+            Self::Proxy(AnthropicProxyError::TokenReservation(
+                TokenReservationError::LimitExceeded,
+            )) => (StatusCode::PAYMENT_REQUIRED, self.to_string()),
+            Self::Proxy(AnthropicProxyError::TokenReservation(_)) => {
+                error!(error = %self, "Anthropic token reservation failed");
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    "token usage check is temporarily unavailable".to_string(),
+                    "token reservation is temporarily unavailable".to_string(),
                 )
             }
             Self::TooManyActiveStreams => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many active streams".to_string(),
             ),
+            Self::Proxy(AnthropicProxyError::RequestPreparation(error))
+                if error.is_request_too_large() =>
+            {
+                (StatusCode::PAYLOAD_TOO_LARGE, self.to_string())
+            }
+            Self::Proxy(AnthropicProxyError::RequestPreparation(error))
+                if error.is_client_error() =>
+            {
+                (StatusCode::BAD_REQUEST, self.to_string())
+            }
             Self::Proxy(_) => {
                 error!(error = %self, "Anthropic proxy request failed");
                 (
@@ -567,7 +569,6 @@ impl Display for AnthropicRouteError {
         match self {
             Self::Auth(error) => write!(formatter, "{error}"),
             Self::RateLimit(error) => write!(formatter, "{error}"),
-            Self::TokenUsage(error) => write!(formatter, "{error}"),
             Self::TooManyActiveStreams => write!(formatter, "too many active streams"),
             Self::Proxy(error) => write!(formatter, "{error}"),
         }
@@ -579,7 +580,6 @@ impl Error for AnthropicRouteError {
         match self {
             Self::Auth(error) => Some(error),
             Self::RateLimit(error) => Some(error),
-            Self::TokenUsage(error) => Some(error),
             Self::Proxy(error) => Some(error),
             Self::TooManyActiveStreams => None,
         }
@@ -587,10 +587,11 @@ impl Error for AnthropicRouteError {
 }
 
 #[derive(Debug)]
-pub enum AnthropicProxyError {
+pub(crate) enum AnthropicProxyError {
     ProviderRequestFailed(reqwest::Error),
+    RequestPreparation(AnthropicRequestError),
     ResponseBuildFailed(axum::http::Error),
-    TokenUsageRecordFailed(TokenUsageError),
+    TokenReservation(TokenReservationError),
 }
 
 impl Display for AnthropicProxyError {
@@ -599,11 +600,14 @@ impl Display for AnthropicProxyError {
             Self::ProviderRequestFailed(error) => {
                 write!(formatter, "failed to call Anthropic: {error}")
             }
+            Self::RequestPreparation(error) => {
+                write!(formatter, "failed to prepare Anthropic request: {error}")
+            }
             Self::ResponseBuildFailed(error) => {
                 write!(formatter, "failed to build Anthropic response: {error}")
             }
-            Self::TokenUsageRecordFailed(error) => {
-                write!(formatter, "failed to record Anthropic token usage: {error}")
+            Self::TokenReservation(error) => {
+                write!(formatter, "Anthropic token reservation failed: {error}")
             }
         }
     }
@@ -613,8 +617,9 @@ impl Error for AnthropicProxyError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::ProviderRequestFailed(error) => Some(error),
+            Self::RequestPreparation(error) => Some(error),
             Self::ResponseBuildFailed(error) => Some(error),
-            Self::TokenUsageRecordFailed(error) => Some(error),
+            Self::TokenReservation(error) => Some(error),
         }
     }
 }
@@ -667,4 +672,14 @@ pub(crate) fn test_proxy(api_key: &str) -> AnthropicProxy {
 #[cfg(test)]
 pub(crate) fn test_header(value: &'static str) -> HeaderName {
     HeaderName::from_static(value)
+}
+
+#[cfg(test)]
+pub(crate) fn test_usage_recording_stream(
+    provider_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Unpin + Send + 'static,
+    reservation: TokenReservation,
+    background_tasks: BackgroundTasks,
+    stream_guard: OwnedActiveStreamGuard,
+) -> impl Stream<Item = ProxyStreamItem> {
+    usage_recording_stream(provider_stream, reservation, background_tasks, stream_guard)
 }

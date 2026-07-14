@@ -6,6 +6,7 @@ import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { DynamoDbStack } from './dynamodb-stack.ts';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
+import { ReconciliationStack } from './reconciliation-stack.ts';
 
 type SynthesizedResource = {
 	Type?: string;
@@ -116,6 +117,10 @@ test('defines the proxy container port and runtime environment', () => {
 					},
 					{
 						Name: 'TOKEN_USAGE_TABLE_NAME',
+						Value: Match.anyValue(),
+					},
+					{
+						Name: 'TOKEN_RECONCILIATION_QUEUE_URL',
 						Value: Match.anyValue(),
 					},
 					{
@@ -518,6 +523,33 @@ test('allows proxy tasks to read and update token usage windows', () => {
 	});
 });
 
+test('allows proxy tasks to publish and consume token reconciliation jobs', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+				Match.objectLike({
+					Action: [
+						'sqs:ReceiveMessage',
+						'sqs:ChangeMessageVisibility',
+						'sqs:GetQueueUrl',
+						'sqs:DeleteMessage',
+						'sqs:GetQueueAttributes',
+					],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -644,6 +676,7 @@ function synthesizeTemplate(
 	const app = new App();
 	const dynamoDbStack = new DynamoDbStack(app, 'TestDynamoDbStack');
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
+	const reconciliationStack = new ReconciliationStack(app, 'TestReconciliationStack');
 	const secretsStack = new Stack(app, 'TestSecretsStack');
 	const anthropicApiKeySecret = new Secret(secretsStack, 'AnthropicApiKeySecret');
 	const openAiApiKeySecret = new Secret(secretsStack, 'OpenAiApiKeySecret');
@@ -657,6 +690,7 @@ function synthesizeTemplate(
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		proxyApiKeyHashSecret,
 		rateLimitTable: dynamoDbStack.rateLimitTable,
+		tokenReconciliationQueue: reconciliationStack.tokenReconciliationQueue,
 		tokenUsageTable: dynamoDbStack.tokenUsageTable,
 		vpc: networkStack.vpc,
 	});

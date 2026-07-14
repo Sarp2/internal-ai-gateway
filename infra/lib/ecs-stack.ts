@@ -40,6 +40,7 @@ import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import type { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import type { IQueue } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -65,6 +66,7 @@ type EcsStackProps = StackProps & {
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
 	rateLimitTable: Table;
+	tokenReconciliationQueue: IQueue;
 	tokenUsageTable: Table;
 	vpc: Vpc;
 };
@@ -142,6 +144,8 @@ export class EcsStack extends Stack {
 				},
 			}),
 		);
+		props.tokenReconciliationQueue.grantSendMessages(this.proxyTaskDefinition.taskRole);
+		props.tokenReconciliationQueue.grantConsumeMessages(this.proxyTaskDefinition.taskRole);
 
 		props.anthropicApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
 		props.openAiApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
@@ -197,6 +201,7 @@ export class EcsStack extends Stack {
 				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,
 				RATE_LIMIT_WINDOW_SECONDS: '60',
 				TOKEN_USAGE_TABLE_NAME: props.tokenUsageTable.tableName,
+				TOKEN_RECONCILIATION_QUEUE_URL: props.tokenReconciliationQueue.queueUrl,
 				RUST_LOG: 'info',
 			},
 			logging: LogDrivers.awsLogs({

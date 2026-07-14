@@ -1,10 +1,23 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use aws_sdk_dynamodb::config::BehaviorVersion;
+use axum::body::Bytes;
 use axum::http::HeaderMap;
 use axum::http::header::{CONNECTION, CONTENT_LENGTH, HOST, TRANSFER_ENCODING};
+use futures_util::{StreamExt, stream};
 
 use crate::anthropic::{
     AnthropicStreamUsage, AnthropicUsage, ConnectionHeaderNames, anthropic_usage_from_json_slice,
     should_forward_request_header, should_forward_response_header, test_header,
+    test_usage_recording_stream,
 };
+use crate::background_tasks::BackgroundTasks;
+use crate::engineer_auth::AuthenticatedEngineer;
+use crate::streams::ActiveStreamTracker;
+use crate::token_reconciliation::TokenReconciliationQueue;
+use crate::token_reservation::TokenReservationManager;
+use crate::token_usage::TokenUsageChecker;
 
 #[test]
 fn strips_internal_and_hop_by_hop_request_headers() {
@@ -240,4 +253,73 @@ data: {"type":"message_delta","usage":{"output_tokens":15}}
             output_tokens: Some(15),
         })
     );
+}
+
+#[tokio::test]
+async fn drains_provider_stream_after_downstream_disconnects() {
+    let consumed_chunks = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&consumed_chunks);
+    let provider_stream = stream::iter((0..20).map(move |_| {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Ok(Bytes::from_static(b"event: ping\n\n"))
+    }));
+    let active_streams = Arc::new(ActiveStreamTracker::new(1));
+    let stream_guard = active_streams
+        .try_start_owned()
+        .expect("stream slot should be available");
+    let background_tasks = BackgroundTasks::new();
+    let token_usage_checker = Arc::new(TokenUsageChecker::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "token-usage",
+    ));
+    let manager = Arc::new(TokenReservationManager::new(
+        aws_sdk_dynamodb::Client::from_conf(
+            aws_sdk_dynamodb::Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .build(),
+        ),
+        "token-usage",
+        TokenReconciliationQueue::new(
+            aws_sdk_sqs::Client::from_conf(
+                aws_sdk_sqs::Config::builder()
+                    .behavior_version(BehaviorVersion::latest())
+                    .build(),
+            ),
+            "https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation",
+        ),
+        token_usage_checker,
+    ));
+    let reservation = manager
+        .reserve(
+            AuthenticatedEngineer {
+                daily_token_limit: None,
+                enabled: true,
+                user_id: "engineer-1".to_string(),
+                weekly_token_limit: None,
+            },
+            100,
+        )
+        .await
+        .expect("unlimited engineer reservation should be created");
+    let mut downstream = Box::pin(test_usage_recording_stream(
+        provider_stream,
+        reservation,
+        background_tasks.clone(),
+        stream_guard,
+    ));
+
+    downstream
+        .next()
+        .await
+        .expect("first downstream chunk should arrive")
+        .expect("first downstream chunk should be valid");
+    drop(downstream);
+    background_tasks.shutdown().await;
+
+    assert_eq!(consumed_chunks.load(Ordering::SeqCst), 20);
+    assert_eq!(active_streams.current(), 0);
 }
