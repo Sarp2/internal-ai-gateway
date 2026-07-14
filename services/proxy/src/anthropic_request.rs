@@ -6,14 +6,16 @@ use axum::body::{Body, Bytes};
 use futures_util::StreamExt;
 use struson::reader::{JsonReader, JsonStreamReader, ValueType};
 use tokio::sync::mpsc;
+use tokio::time::{Duration, Instant, timeout_at};
 use tokio_util::io::ReaderStream;
 
 const BODY_CHANNEL_CAPACITY: usize = 4;
 const BODY_CHUNK_BYTES: usize = 16 * 1024;
 const IMAGE_INPUT_TOKEN_RESERVE: u64 = 32_768;
 const MAX_SPOOLED_REQUEST_BYTES: u64 = 256 * 1024 * 1024;
+const REQUEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
-type InputChunk = Result<Bytes, String>;
+type InputChunk = io::Result<Bytes>;
 
 pub(crate) struct PreparedAnthropicRequest {
     body: reqwest::Body,
@@ -30,8 +32,15 @@ impl PreparedAnthropicRequest {
 pub(crate) async fn prepare_anthropic_request(
     body: Body,
 ) -> Result<PreparedAnthropicRequest, AnthropicRequestError> {
+    prepare_anthropic_request_with_timeout(body, REQUEST_UPLOAD_TIMEOUT).await
+}
+
+async fn prepare_anthropic_request_with_timeout(
+    body: Body,
+    upload_timeout: Duration,
+) -> Result<PreparedAnthropicRequest, AnthropicRequestError> {
     let (sender, receiver) = mpsc::channel(BODY_CHANNEL_CAPACITY);
-    tokio::spawn(pump_request_body(body, sender));
+    tokio::spawn(pump_request_body(body, sender, upload_timeout));
 
     let (file, metadata, body_bytes) = tokio::task::spawn_blocking(move || {
         let mut file = tempfile::tempfile().map_err(AnthropicRequestError::SpoolFailed)?;
@@ -202,9 +211,25 @@ fn count_image_inputs(reader: &mut impl JsonReader) -> Result<u64, AnthropicRequ
     }
 }
 
-async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>) {
+async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>, upload_timeout: Duration) {
     let mut stream = body.into_data_stream();
-    while let Some(result) = stream.next().await {
+    let deadline = Instant::now() + upload_timeout;
+
+    loop {
+        let result = match timeout_at(deadline, stream.next()).await {
+            Ok(Some(result)) => result,
+            Ok(None) => return,
+            Err(_) => {
+                let _ = sender
+                    .send(Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "Anthropic request upload timed out",
+                    )))
+                    .await;
+                return;
+            }
+        };
+
         match result {
             Ok(chunk) => {
                 for section in chunk.chunks(BODY_CHUNK_BYTES) {
@@ -218,7 +243,9 @@ async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>) {
                 }
             }
             Err(error) => {
-                let _ = sender.send(Err(error.to_string())).await;
+                let _ = sender
+                    .send(Err(io::Error::new(io::ErrorKind::InvalidData, error)))
+                    .await;
                 return;
             }
         }
@@ -249,7 +276,7 @@ impl io::Read for ChannelReader {
                     self.current = chunk;
                     self.offset = 0;
                 }
-                Some(Err(error)) => return Err(io::Error::new(io::ErrorKind::InvalidData, error)),
+                Some(Err(error)) => return Err(error),
                 None => return Ok(0),
             }
         }
@@ -319,6 +346,10 @@ impl AnthropicRequestError {
     pub(crate) fn is_request_too_large(&self) -> bool {
         matches!(self, Self::SpoolFailed(error) if error.kind() == io::ErrorKind::FileTooLarge)
     }
+
+    pub(crate) fn is_upload_timeout(&self) -> bool {
+        matches!(self, Self::SpoolFailed(error) if error.kind() == io::ErrorKind::TimedOut)
+    }
 }
 
 impl Display for AnthropicRequestError {
@@ -363,4 +394,14 @@ pub(crate) fn inspect_slice(body: &[u8]) -> Result<(bool, u64, u64), AnthropicRe
         metadata.max_tokens,
         metadata.image_inputs,
     ))
+}
+
+#[cfg(test)]
+pub(crate) async fn prepare_with_upload_timeout(
+    body: Body,
+    upload_timeout: Duration,
+) -> Result<(), AnthropicRequestError> {
+    prepare_anthropic_request_with_timeout(body, upload_timeout)
+        .await
+        .map(|_| ())
 }

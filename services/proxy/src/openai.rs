@@ -490,6 +490,9 @@ impl IntoResponse for OpenAiRouteError {
             {
                 (StatusCode::PAYLOAD_TOO_LARGE, self.to_string())
             }
+            Self::Proxy(OpenAiProxyError::RequestTransform(error)) if error.is_upload_timeout() => {
+                (StatusCode::REQUEST_TIMEOUT, self.to_string())
+            }
             Self::Proxy(OpenAiProxyError::RequestTransform(error)) if error.is_client_error() => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }

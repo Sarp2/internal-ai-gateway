@@ -1,4 +1,21 @@
-use crate::anthropic_request::inspect_slice;
+use std::io;
+use std::time::Duration;
+
+use axum::body::{Body, Bytes};
+use futures_util::stream;
+
+use crate::anthropic_request::{inspect_slice, prepare_with_upload_timeout};
+
+#[tokio::test]
+async fn rejects_request_bodies_that_exceed_the_upload_deadline() {
+    let body = Body::from_stream(stream::pending::<Result<Bytes, io::Error>>());
+
+    let error = prepare_with_upload_timeout(body, Duration::from_millis(10))
+        .await
+        .expect_err("stalled upload should time out");
+
+    assert!(error.is_upload_timeout());
+}
 
 #[test]
 fn extracts_reservation_controls_without_changing_the_request() {

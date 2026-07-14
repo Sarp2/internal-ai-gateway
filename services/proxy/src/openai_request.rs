@@ -8,6 +8,7 @@ use serde_json::{Map, Value};
 use struson::reader::{JsonReader, JsonStreamReader, TransferError, ValueType};
 use struson::writer::{JsonStreamWriter, JsonWriter};
 use tokio::sync::mpsc;
+use tokio::time::{Duration, Instant, timeout_at};
 use tokio_util::io::ReaderStream;
 
 const BODY_CHANNEL_CAPACITY: usize = 4;
@@ -17,8 +18,9 @@ const MAX_JSON_KEY_BYTES: usize = 8 * 1024;
 const MAX_JSON_NESTING_DEPTH: usize = 128;
 const MAX_STREAM_CONTROL_BYTES: usize = 64 * 1024;
 const MAX_SPOOLED_REQUEST_BYTES: u64 = 256 * 1024 * 1024;
+const REQUEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
-type InputChunk = Result<Bytes, String>;
+type InputChunk = io::Result<Bytes>;
 
 pub(crate) struct PreparedOpenAiRequest {
     body: reqwest::Body,
@@ -36,9 +38,18 @@ pub(crate) async fn prepare_openai_request(
     body: Body,
     default_max_completion_tokens: u64,
 ) -> Result<PreparedOpenAiRequest, OpenAiRequestTransformError> {
+    prepare_openai_request_with_timeout(body, default_max_completion_tokens, REQUEST_UPLOAD_TIMEOUT)
+        .await
+}
+
+async fn prepare_openai_request_with_timeout(
+    body: Body,
+    default_max_completion_tokens: u64,
+    upload_timeout: Duration,
+) -> Result<PreparedOpenAiRequest, OpenAiRequestTransformError> {
     let (input_sender, input_receiver) = mpsc::channel(BODY_CHANNEL_CAPACITY);
 
-    tokio::spawn(pump_request_body(body, input_sender));
+    tokio::spawn(pump_request_body(body, input_sender, upload_timeout));
     let (file, metadata, body_bytes, image_inputs) = tokio::task::spawn_blocking(move || {
         let mut file = tempfile::tempfile().map_err(OpenAiRequestTransformError::OutputFailed)?;
         let reader = JsonKeyLimitReader::new(ChannelReader::new(input_receiver));
@@ -153,10 +164,25 @@ fn calculate_token_budget(
         .ok_or(OpenAiRequestTransformError::TokenBudgetOverflow)
 }
 
-async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>) {
+async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>, upload_timeout: Duration) {
     let mut stream = body.into_data_stream();
+    let deadline = Instant::now() + upload_timeout;
 
-    while let Some(result) = stream.next().await {
+    loop {
+        let result = match timeout_at(deadline, stream.next()).await {
+            Ok(Some(result)) => result,
+            Ok(None) => return,
+            Err(_) => {
+                let _ = sender
+                    .send(Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "OpenAI request upload timed out",
+                    )))
+                    .await;
+                return;
+            }
+        };
+
         match result {
             Ok(chunk) => {
                 for section in chunk.chunks(BODY_CHUNK_BYTES) {
@@ -170,7 +196,9 @@ async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>) {
                 }
             }
             Err(error) => {
-                let _ = sender.send(Err(error.to_string())).await;
+                let _ = sender
+                    .send(Err(io::Error::new(io::ErrorKind::InvalidData, error)))
+                    .await;
                 return;
             }
         }
@@ -427,7 +455,7 @@ impl Read for ChannelReader {
                     self.current = chunk;
                     self.offset = 0;
                 }
-                Some(Err(error)) => return Err(io::Error::new(io::ErrorKind::InvalidData, error)),
+                Some(Err(error)) => return Err(error),
                 None => return Ok(0),
             }
         }
@@ -651,6 +679,14 @@ impl OpenAiRequestTransformError {
     pub fn is_request_too_large(&self) -> bool {
         matches!(self, Self::OutputFailed(error) if error.kind() == io::ErrorKind::FileTooLarge)
     }
+
+    pub fn is_upload_timeout(&self) -> bool {
+        match self {
+            Self::InvalidJson(struson::reader::ReaderError::IoError { error, .. })
+            | Self::OutputFailed(error) => error.kind() == io::ErrorKind::TimedOut,
+            _ => false,
+        }
+    }
 }
 
 impl Display for OpenAiRequestTransformError {
@@ -717,4 +753,14 @@ pub(crate) fn transform_reader(
 ) -> Result<bool, OpenAiRequestTransformError> {
     transform_json(JsonKeyLimitReader::new(reader), writer, 32_768)
         .map(|metadata| metadata.streaming)
+}
+
+#[cfg(test)]
+pub(crate) async fn prepare_with_upload_timeout(
+    body: Body,
+    upload_timeout: Duration,
+) -> Result<(), OpenAiRequestTransformError> {
+    prepare_openai_request_with_timeout(body, 32_768, upload_timeout)
+        .await
+        .map(|_| ())
 }

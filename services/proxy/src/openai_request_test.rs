@@ -1,9 +1,24 @@
 use std::io::{self, Cursor, Read};
+use std::time::Duration;
 
-use axum::body::{Body, to_bytes};
+use axum::body::{Body, Bytes, to_bytes};
+use futures_util::stream;
 use serde_json::Value;
 
-use crate::openai_request::{prepare_openai_request, transform_reader, transform_slice};
+use crate::openai_request::{
+    prepare_openai_request, prepare_with_upload_timeout, transform_reader, transform_slice,
+};
+
+#[tokio::test]
+async fn rejects_request_bodies_that_exceed_the_upload_deadline() {
+    let body = Body::from_stream(stream::pending::<Result<Bytes, io::Error>>());
+
+    let error = prepare_with_upload_timeout(body, Duration::from_millis(10))
+        .await
+        .expect_err("stalled upload should time out");
+
+    assert!(error.is_upload_timeout());
+}
 
 #[test]
 fn forces_usage_in_streaming_requests_and_preserves_options() {
