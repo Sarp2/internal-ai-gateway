@@ -2,21 +2,17 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::{self, BufReader, Seek, SeekFrom, Write};
 
-use axum::body::{Body, Bytes};
-use futures_util::StreamExt;
+use axum::body::Body;
 use struson::reader::{JsonReader, JsonStreamReader, ReaderSettings, ValueType};
-use tokio::sync::mpsc;
-use tokio::time::{Duration, Instant, timeout_at};
+use tokio::time::Duration;
 use tokio_util::io::ReaderStream;
 
-const BODY_CHANNEL_CAPACITY: usize = 4;
-const BODY_CHUNK_BYTES: usize = 16 * 1024;
+use crate::request_body::timed_request_body_reader;
+
 const IMAGE_INPUT_TOKEN_RESERVE: u64 = 32_768;
 const MAX_JSON_NESTING_DEPTH: u32 = 128;
 const MAX_SPOOLED_REQUEST_BYTES: u64 = 256 * 1024 * 1024;
 const REQUEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
-
-type InputChunk = io::Result<Bytes>;
 
 pub(crate) struct PreparedAnthropicRequest {
     body: reqwest::Body,
@@ -40,15 +36,14 @@ async fn prepare_anthropic_request_with_timeout(
     body: Body,
     upload_timeout: Duration,
 ) -> Result<PreparedAnthropicRequest, AnthropicRequestError> {
-    let (sender, receiver) = mpsc::channel(BODY_CHANNEL_CAPACITY);
-    tokio::spawn(pump_request_body(body, sender, upload_timeout));
+    let mut reader =
+        timed_request_body_reader(body, upload_timeout, "Anthropic request upload timed out");
 
     let (file, metadata, body_bytes) = tokio::task::spawn_blocking(move || {
         let mut file = tempfile::tempfile().map_err(AnthropicRequestError::SpoolFailed)?;
         let body_bytes = {
             let mut writer = LimitedSpoolWriter::new(&mut file, MAX_SPOOLED_REQUEST_BYTES);
-            io::copy(&mut ChannelReader::new(receiver), &mut writer)
-                .map_err(AnthropicRequestError::SpoolFailed)?;
+            io::copy(&mut reader, &mut writer).map_err(AnthropicRequestError::SpoolFailed)?;
             writer.flush().map_err(AnthropicRequestError::SpoolFailed)?;
             writer.written
         };
@@ -224,83 +219,6 @@ fn count_image_inputs(reader: &mut impl JsonReader) -> Result<u64, AnthropicRequ
                 .map_err(AnthropicRequestError::InvalidJson)?;
             Ok(0)
         }
-    }
-}
-
-async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>, upload_timeout: Duration) {
-    let mut stream = body.into_data_stream();
-    let deadline = Instant::now() + upload_timeout;
-
-    loop {
-        let result = match timeout_at(deadline, stream.next()).await {
-            Ok(Some(result)) => result,
-            Ok(None) => return,
-            Err(_) => {
-                let _ = sender
-                    .send(Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "Anthropic request upload timed out",
-                    )))
-                    .await;
-                return;
-            }
-        };
-
-        match result {
-            Ok(chunk) => {
-                for section in chunk.chunks(BODY_CHUNK_BYTES) {
-                    if sender
-                        .send(Ok(Bytes::copy_from_slice(section)))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
-            }
-            Err(error) => {
-                let _ = sender
-                    .send(Err(io::Error::new(io::ErrorKind::InvalidData, error)))
-                    .await;
-                return;
-            }
-        }
-    }
-}
-
-struct ChannelReader {
-    current: Bytes,
-    offset: usize,
-    receiver: mpsc::Receiver<InputChunk>,
-}
-
-impl ChannelReader {
-    fn new(receiver: mpsc::Receiver<InputChunk>) -> Self {
-        Self {
-            current: Bytes::new(),
-            offset: 0,
-            receiver,
-        }
-    }
-}
-
-impl io::Read for ChannelReader {
-    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
-        while self.offset == self.current.len() {
-            match self.receiver.blocking_recv() {
-                Some(Ok(chunk)) => {
-                    self.current = chunk;
-                    self.offset = 0;
-                }
-                Some(Err(error)) => return Err(error),
-                None => return Ok(0),
-            }
-        }
-
-        let length = output.len().min(self.current.len() - self.offset);
-        output[..length].copy_from_slice(&self.current[self.offset..self.offset + length]);
-        self.offset += length;
-        Ok(length)
     }
 }
 

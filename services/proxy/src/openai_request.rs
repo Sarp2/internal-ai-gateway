@@ -2,25 +2,21 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 
-use axum::body::{Body, Bytes};
-use futures_util::StreamExt;
+use axum::body::Body;
 use serde_json::{Map, Value};
 use struson::reader::{JsonReader, JsonStreamReader, TransferError, ValueType};
 use struson::writer::{JsonStreamWriter, JsonWriter};
-use tokio::sync::mpsc;
-use tokio::time::{Duration, Instant, timeout_at};
+use tokio::time::Duration;
 use tokio_util::io::ReaderStream;
 
-const BODY_CHANNEL_CAPACITY: usize = 4;
-const BODY_CHUNK_BYTES: usize = 16 * 1024;
+use crate::request_body::{BODY_CHUNK_BYTES, timed_request_body_reader};
+
 const IMAGE_INPUT_TOKEN_RESERVE: u64 = 32_768;
 const MAX_JSON_KEY_BYTES: usize = 8 * 1024;
 const MAX_JSON_NESTING_DEPTH: usize = 128;
 const MAX_STREAM_CONTROL_BYTES: usize = 64 * 1024;
 const MAX_SPOOLED_REQUEST_BYTES: u64 = 256 * 1024 * 1024;
 const REQUEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
-
-type InputChunk = io::Result<Bytes>;
 
 pub(crate) struct PreparedOpenAiRequest {
     body: reqwest::Body,
@@ -47,12 +43,11 @@ async fn prepare_openai_request_with_timeout(
     default_max_completion_tokens: u64,
     upload_timeout: Duration,
 ) -> Result<PreparedOpenAiRequest, OpenAiRequestTransformError> {
-    let (input_sender, input_receiver) = mpsc::channel(BODY_CHANNEL_CAPACITY);
-
-    tokio::spawn(pump_request_body(body, input_sender, upload_timeout));
+    let input_reader =
+        timed_request_body_reader(body, upload_timeout, "OpenAI request upload timed out");
     let (file, metadata, body_bytes, image_inputs) = tokio::task::spawn_blocking(move || {
         let mut file = tempfile::tempfile().map_err(OpenAiRequestTransformError::OutputFailed)?;
-        let reader = JsonKeyLimitReader::new(ChannelReader::new(input_receiver));
+        let reader = JsonKeyLimitReader::new(input_reader);
         let writer = BufWriter::with_capacity(
             BODY_CHUNK_BYTES,
             LimitedSpoolWriter::new(&mut file, MAX_SPOOLED_REQUEST_BYTES),
@@ -162,47 +157,6 @@ fn calculate_token_budget(
         .checked_add(image_token_reserve)
         .and_then(|input_budget| input_budget.checked_add(max_output_tokens))
         .ok_or(OpenAiRequestTransformError::TokenBudgetOverflow)
-}
-
-async fn pump_request_body(body: Body, sender: mpsc::Sender<InputChunk>, upload_timeout: Duration) {
-    let mut stream = body.into_data_stream();
-    let deadline = Instant::now() + upload_timeout;
-
-    loop {
-        let result = match timeout_at(deadline, stream.next()).await {
-            Ok(Some(result)) => result,
-            Ok(None) => return,
-            Err(_) => {
-                let _ = sender
-                    .send(Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "OpenAI request upload timed out",
-                    )))
-                    .await;
-                return;
-            }
-        };
-
-        match result {
-            Ok(chunk) => {
-                for section in chunk.chunks(BODY_CHUNK_BYTES) {
-                    if sender
-                        .send(Ok(Bytes::copy_from_slice(section)))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
-            }
-            Err(error) => {
-                let _ = sender
-                    .send(Err(io::Error::new(io::ErrorKind::InvalidData, error)))
-                    .await;
-                return;
-            }
-        }
-    }
 }
 
 fn transform_json(
@@ -428,43 +382,6 @@ fn map_transfer_error(error: TransferError) -> OpenAiRequestTransformError {
     match error {
         TransferError::ReaderError(error) => OpenAiRequestTransformError::InvalidJson(error),
         TransferError::WriterError(error) => OpenAiRequestTransformError::OutputFailed(error),
-    }
-}
-
-struct ChannelReader {
-    current: Bytes,
-    offset: usize,
-    receiver: mpsc::Receiver<InputChunk>,
-}
-
-impl ChannelReader {
-    fn new(receiver: mpsc::Receiver<InputChunk>) -> Self {
-        Self {
-            current: Bytes::new(),
-            offset: 0,
-            receiver,
-        }
-    }
-}
-
-impl Read for ChannelReader {
-    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
-        while self.offset == self.current.len() {
-            match self.receiver.blocking_recv() {
-                Some(Ok(chunk)) => {
-                    self.current = chunk;
-                    self.offset = 0;
-                }
-                Some(Err(error)) => return Err(error),
-                None => return Ok(0),
-            }
-        }
-
-        let bytes_to_copy = output.len().min(self.current.len() - self.offset);
-        output[..bytes_to_copy]
-            .copy_from_slice(&self.current[self.offset..self.offset + bytes_to_copy]);
-        self.offset += bytes_to_copy;
-        Ok(bytes_to_copy)
     }
 }
 

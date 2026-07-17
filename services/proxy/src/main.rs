@@ -37,6 +37,7 @@ mod metrics;
 pub mod openai;
 mod openai_request;
 pub mod rate_limit;
+mod request_body;
 mod shutdown;
 mod sse;
 pub mod streams;
