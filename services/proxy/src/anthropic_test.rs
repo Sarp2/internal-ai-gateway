@@ -340,6 +340,45 @@ async fn shutdown_cancels_a_stalled_provider_drain() {
     assert_eq!(active_streams.current(), 0);
 }
 
+#[tokio::test]
+async fn shutdown_interrupts_a_blocked_downstream_send() {
+    let consumed_chunks = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&consumed_chunks);
+    let provider_stream = stream::iter((0..20).map(move |_| {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Ok(Bytes::from_static(b"event: ping\n\n"))
+    }));
+    let active_streams = Arc::new(ActiveStreamTracker::new(1));
+    let stream_guard = active_streams
+        .try_start_owned()
+        .expect("stream slot should be available");
+    let background_tasks = BackgroundTasks::new();
+    let reservation = untracked_reservation().await;
+    let _downstream = test_usage_recording_stream(
+        provider_stream,
+        reservation,
+        background_tasks.clone(),
+        stream_guard,
+    );
+
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        while consumed_chunks.load(Ordering::SeqCst) < 9 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("provider should fill the downstream channel");
+
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        background_tasks.shutdown(),
+    )
+    .await
+    .expect("shutdown should interrupt the blocked downstream send");
+
+    assert_eq!(active_streams.current(), 0);
+}
+
 async fn untracked_reservation() -> TokenReservation {
     let token_usage_checker = Arc::new(TokenUsageChecker::new(
         aws_sdk_dynamodb::Client::from_conf(

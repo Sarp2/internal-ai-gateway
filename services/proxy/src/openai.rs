@@ -266,7 +266,7 @@ fn usage_recording_stream(
         let mut downstream_connected = true;
         let _stream_guard = stream_guard;
 
-        loop {
+        'provider: loop {
             let provider_result = tokio::select! {
                 () = cancellation.cancelled() => {
                     warn!(%engineer_id, "OpenAI provider drain cancelled during shutdown");
@@ -282,18 +282,30 @@ fn usage_recording_stream(
                 Ok(chunk) => {
                     usage_recorder.observe_chunk(&chunk);
 
-                    if downstream_connected && sender.send(Ok(chunk)).await.is_err() {
-                        downstream_connected = false;
-                        warn!(%engineer_id, "OpenAI client disconnected; continuing provider drain");
+                    if downstream_connected {
+                        let send_result = tokio::select! {
+                            () = cancellation.cancelled() => {
+                                warn!(%engineer_id, "OpenAI response forwarding cancelled during shutdown");
+                                break 'provider;
+                            }
+                            send_result = sender.send(Ok(chunk)) => send_result,
+                        };
+                        if send_result.is_err() {
+                            downstream_connected = false;
+                            warn!(%engineer_id, "OpenAI client disconnected; continuing provider drain");
+                        }
                     }
                 }
                 Err(error) => {
                     warn!(%engineer_id, %error, "OpenAI provider stream failed");
 
                     if downstream_connected {
-                        let _ = sender
-                            .send(Err(Box::new(error) as Box<dyn Error + Send + Sync>))
-                            .await;
+                        tokio::select! {
+                            () = cancellation.cancelled() => {
+                                warn!(%engineer_id, "OpenAI error forwarding cancelled during shutdown");
+                            }
+                            _ = sender.send(Err(Box::new(error) as Box<dyn Error + Send + Sync>)) => {}
+                        }
                     }
 
                     break;
