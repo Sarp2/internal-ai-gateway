@@ -58,6 +58,8 @@ mod app_test;
 #[cfg(test)]
 mod auth_test;
 #[cfg(test)]
+mod background_tasks_test;
+#[cfg(test)]
 mod config_test;
 #[cfg(test)]
 mod engineer_auth_test;
@@ -67,6 +69,8 @@ mod openai_request_test;
 mod openai_test;
 #[cfg(test)]
 mod rate_limit_test;
+#[cfg(test)]
+mod request_body_test;
 #[cfg(test)]
 mod sse_test;
 #[cfg(test)]
@@ -131,6 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(%address, "proxy service listening");
 
+    let shutdown_tasks = background_tasks.clone();
     let server_result = axum::serve(
         listener,
         app(AppState::new(
@@ -143,7 +148,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             token_accounting,
         )),
     )
-    .with_graceful_shutdown(shutdown_signal())
+    .with_graceful_shutdown(async move {
+        shutdown_signal().await;
+        shutdown_tasks.cancel();
+    })
     .await;
 
     background_tasks.shutdown().await;

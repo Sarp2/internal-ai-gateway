@@ -28,8 +28,12 @@ impl BackgroundTasks {
         self.cancellation.clone()
     }
 
-    pub async fn shutdown(&self) {
+    pub fn cancel(&self) {
         self.cancellation.cancel();
+    }
+
+    pub async fn shutdown(&self) {
+        self.cancel();
         self.tracker.close();
 
         if timeout(SHUTDOWN_TIMEOUT, self.tracker.wait())
