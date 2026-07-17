@@ -24,7 +24,10 @@ const reconciliationStack = new ReconciliationStack(app, 'InternalAiGatewayRecon
 	queueNamePrefix: 'internal-ai-gateway-token-reconciliation',
 	removalPolicy: RemovalPolicy.RETAIN,
 });
-const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack');
+const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack', {
+	removalPolicy: RemovalPolicy.RETAIN,
+	secretNamePrefix: 'internal-ai-gateway',
+});
 new EcsStack(app, 'InternalAiGatewayEcsStack', {
 	anthropicApiKeySecret: secretsStack.anthropicApiKeySecret,
 	engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
@@ -47,5 +50,9 @@ if (integrationTestsEnabled) {
 	new ReconciliationStack(app, 'InternalAiGatewayIntegrationReconciliationStack', {
 		queueNamePrefix: 'internal-ai-gateway-integration-token-reconciliation',
 		removalPolicy: RemovalPolicy.DESTROY,
+	});
+	new SecretsStack(app, 'InternalAiGatewayIntegrationSecretsStack', {
+		removalPolicy: RemovalPolicy.DESTROY,
+		secretNamePrefix: 'internal-ai-gateway/integration',
 	});
 }
