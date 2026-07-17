@@ -32,7 +32,7 @@ export class ReconciliationStack extends Stack {
 			enforceSSL: true,
 			removalPolicy: RemovalPolicy.RETAIN,
 			receiveMessageWaitTime: Duration.seconds(20),
-			retentionPeriod: Duration.days(14),
+			retentionPeriod: Duration.days(1),
 			visibilityTimeout: Duration.minutes(5),
 		});
 

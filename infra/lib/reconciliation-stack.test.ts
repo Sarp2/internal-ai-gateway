@@ -9,7 +9,7 @@ test('defines durable token reconciliation queues', () => {
 	template.resourceCountIs('AWS::SQS::Queue', 2);
 	template.hasResourceProperties('AWS::SQS::Queue', {
 		QueueName: 'internal-ai-gateway-token-reconciliation',
-		MessageRetentionPeriod: 1_209_600,
+		MessageRetentionPeriod: 86_400,
 		ReceiveMessageWaitTimeSeconds: 20,
 		RedrivePolicy: {
 			deadLetterTargetArn: Match.anyValue(),
