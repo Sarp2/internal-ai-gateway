@@ -9,7 +9,7 @@ fn cancellation_reason(code: &str) -> CancellationReason {
 }
 
 fn no_cancellation_reason() -> CancellationReason {
-    CancellationReason::builder().code("None").build()
+    CancellationReason::builder().build()
 }
 
 #[test]
