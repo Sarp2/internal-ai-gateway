@@ -1,3 +1,4 @@
+import { strictEqual } from 'node:assert';
 import { test } from 'node:test';
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
@@ -30,9 +31,8 @@ test('retains token reconciliation queues when the stack is deleted', () => {
 	const queues = template.findResources('AWS::SQS::Queue');
 
 	for (const queue of Object.values(queues)) {
-		if (queue.DeletionPolicy !== 'Retain' || queue.UpdateReplacePolicy !== 'Retain') {
-			throw new Error('token reconciliation queues must be retained');
-		}
+		strictEqual(queue.DeletionPolicy, 'Retain');
+		strictEqual(queue.UpdateReplacePolicy, 'Retain');
 	}
 });
 
