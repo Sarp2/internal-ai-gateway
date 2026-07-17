@@ -1,0 +1,32 @@
+services/proxy/src/request_body_test.rs
+  s_c26b496cd2589a::t_331d105305560d 22-24,38-39,41-42
+  s_c26b496cd2589a::t_c0b2cef209b56b 1-2,4-5,8,32-37,40,43-54
+  s_c26b496cd2589a::t_70a57e7ff12a50 3,6-7,9-21,25-31,55
+services/proxy/src/background_tasks.rs
+  s_c26b496cd2589a::t_ca4c4bd3adedf7 31,33-36
+services/proxy/src/request_body.rs
+  s_c26b496cd2589a::t_331d105305560d 64
+  s_c26b496cd2589a::t_70a57e7ff12a50 2,12,20,26,28,33,36,42-46,51,56-59,65-74,79-83,90-100,104-105,109,114,121-124,127,131-141,152-155
+  s_c26b496cd2589a::t_461cfa5848a231 60,156
+services/proxy/src/background_tasks_test.rs
+  s_c26b496cd2589a::t_ca4c4bd3adedf7 1-16
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_ca4c4bd3adedf7 61-62,138,151-154
+  s_c26b496cd2589a::t_70a57e7ff12a50 73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "46ff142b26cbc996bf80d036f410cfca999d42f6",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
