@@ -1,0 +1,21 @@
+infra/lib/reconciliation-stack.test.ts
+  s_c26b496cd2589a::t_1f9077a0b8a511 62-63
+  s_c26b496cd2589a::t_26fc986c6bdce9 73-75,79-80
+  s_c26b496cd2589a::t_c36d12efe79403 64-68,76-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a670ff22ee630672a55867839286e0d38407ca16",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
