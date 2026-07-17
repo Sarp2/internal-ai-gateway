@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-import { App } from 'aws-cdk-lib';
+import { App, RemovalPolicy } from 'aws-cdk-lib';
 import { DynamoDbStack } from '../stacks/dynamodb-stack.ts';
 import { EcsStack } from '../stacks/ecs-stack.ts';
-import { IntegrationDynamoDbStack } from '../stacks/integration-dynamodb-stack.ts';
 import { LambdaStack } from '../stacks/lambda-stack.ts';
 import { NetworkStack } from '../stacks/network-stack.ts';
 import { ReconciliationStack } from '../stacks/reconciliation-stack.ts';
@@ -16,7 +15,9 @@ const integrationTestsContext = app.node.tryGetContext('integrationTests') as un
 const integrationTestsEnabled =
 	integrationTestsContext === true || integrationTestsContext === 'true';
 
-const dynamoDbStack = new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack');
+const dynamoDbStack = new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack', {
+	removalPolicy: RemovalPolicy.RETAIN,
+});
 new LambdaStack(app, 'InternalAiGatewayLambdaStack');
 const networkStack = new NetworkStack(app, 'InternalAiGatewayNetworkStack');
 const reconciliationStack = new ReconciliationStack(app, 'InternalAiGatewayReconciliationStack');
@@ -37,5 +38,7 @@ new EcsStack(app, 'InternalAiGatewayEcsStack', {
 new S3Stack(app, 'InternalAiGatewayS3Stack');
 
 if (integrationTestsEnabled) {
-	new IntegrationDynamoDbStack(app, 'InternalAiGatewayIntegrationDynamoDbStack');
+	new DynamoDbStack(app, 'InternalAiGatewayIntegrationDynamoDbStack', {
+		removalPolicy: RemovalPolicy.DESTROY,
+	});
 }

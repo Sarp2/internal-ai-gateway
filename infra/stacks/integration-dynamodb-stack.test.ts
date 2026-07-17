@@ -1,8 +1,8 @@
 import { strictEqual } from 'node:assert';
 import { test } from 'node:test';
-import { App } from 'aws-cdk-lib';
+import { App, RemovalPolicy } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { IntegrationDynamoDbStack } from './integration-dynamodb-stack.ts';
+import { DynamoDbStack } from './dynamodb-stack.ts';
 
 test('defines isolated integration tables with production schemas', () => {
 	const template = synthesizeTemplate();
@@ -48,7 +48,9 @@ test('destroys integration tables with their stack', () => {
 
 function synthesizeTemplate(): Template {
 	const app = new App();
-	const stack = new IntegrationDynamoDbStack(app, 'TestIntegrationDynamoDbStack');
+	const stack = new DynamoDbStack(app, 'TestIntegrationDynamoDbStack', {
+		removalPolicy: RemovalPolicy.DESTROY,
+	});
 
 	return Template.fromStack(stack);
 }
