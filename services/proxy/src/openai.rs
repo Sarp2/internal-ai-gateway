@@ -258,6 +258,7 @@ fn usage_recording_stream(
 ) -> impl Stream<Item = ProxyStreamItem> {
     let (sender, receiver) = mpsc::channel(STREAM_CHANNEL_CAPACITY);
     let engineer_id = reservation.engineer_id().to_string();
+    let cancellation = background_tasks.cancellation_token();
 
     background_tasks.spawn(async move {
         let mut provider_stream = provider_stream;
@@ -265,7 +266,18 @@ fn usage_recording_stream(
         let mut downstream_connected = true;
         let _stream_guard = stream_guard;
 
-        while let Some(provider_result) = provider_stream.next().await {
+        loop {
+            let provider_result = tokio::select! {
+                () = cancellation.cancelled() => {
+                    warn!(%engineer_id, "OpenAI provider drain cancelled during shutdown");
+                    break;
+                }
+                provider_result = provider_stream.next() => provider_result,
+            };
+            let Some(provider_result) = provider_result else {
+                break;
+            };
+
             match provider_result {
                 Ok(chunk) => {
                     usage_recorder.observe_chunk(&chunk);

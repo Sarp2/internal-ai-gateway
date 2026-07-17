@@ -17,7 +17,7 @@ use crate::openai::{
 };
 use crate::streams::ActiveStreamTracker;
 use crate::token_reconciliation::TokenReconciliationQueue;
-use crate::token_reservation::TokenReservationManager;
+use crate::token_reservation::{TokenReservation, TokenReservationManager};
 use crate::token_usage::TokenUsageChecker;
 
 #[test]
@@ -181,6 +181,62 @@ async fn drains_provider_stream_after_downstream_disconnects() {
         .try_start_owned()
         .expect("stream slot should be available");
     let background_tasks = BackgroundTasks::new();
+    let reservation = untracked_reservation().await;
+    let mut downstream = Box::pin(test_usage_recording_stream(
+        provider_stream,
+        reservation,
+        stream_guard,
+        background_tasks.clone(),
+    ));
+
+    downstream
+        .next()
+        .await
+        .expect("first downstream chunk should arrive")
+        .expect("first downstream chunk should be valid");
+    drop(downstream);
+
+    tokio::time::timeout(std::time::Duration::from_secs(1), async {
+        while consumed_chunks.load(Ordering::SeqCst) < 20 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("provider drain should finish");
+    background_tasks.shutdown().await;
+
+    assert_eq!(consumed_chunks.load(Ordering::SeqCst), 20);
+    assert_eq!(active_streams.current(), 0);
+}
+
+#[tokio::test]
+async fn shutdown_cancels_a_stalled_provider_drain() {
+    let provider_stream = stream::pending::<Result<Bytes, reqwest::Error>>();
+    let active_streams = Arc::new(ActiveStreamTracker::new(1));
+    let stream_guard = active_streams
+        .try_start_owned()
+        .expect("stream slot should be available");
+    let background_tasks = BackgroundTasks::new();
+    let reservation = untracked_reservation().await;
+    let downstream = test_usage_recording_stream(
+        provider_stream,
+        reservation,
+        stream_guard,
+        background_tasks.clone(),
+    );
+
+    drop(downstream);
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        background_tasks.shutdown(),
+    )
+    .await
+    .expect("shutdown should cancel the stalled provider drain");
+
+    assert_eq!(active_streams.current(), 0);
+}
+
+async fn untracked_reservation() -> TokenReservation {
     let token_usage_checker = Arc::new(TokenUsageChecker::new(
         aws_sdk_dynamodb::Client::from_conf(
             aws_sdk_dynamodb::Config::builder()
@@ -212,26 +268,8 @@ async fn drains_provider_stream_after_downstream_disconnects() {
         ),
         Arc::clone(&token_usage_checker),
     ));
-    let reservation = token_reservation_manager
+    token_reservation_manager
         .reserve(engineer, 100)
         .await
-        .expect("unlimited engineer reservation should be created");
-    let mut downstream = Box::pin(test_usage_recording_stream(
-        provider_stream,
-        reservation,
-        stream_guard,
-        background_tasks.clone(),
-    ));
-
-    downstream
-        .next()
-        .await
-        .expect("first downstream chunk should arrive")
-        .expect("first downstream chunk should be valid");
-    drop(downstream);
-
-    background_tasks.shutdown().await;
-
-    assert_eq!(consumed_chunks.load(Ordering::SeqCst), 20);
-    assert_eq!(active_streams.current(), 0);
+        .expect("unlimited engineer reservation should be created")
 }
