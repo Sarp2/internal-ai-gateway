@@ -4,7 +4,9 @@ use std::time::Duration;
 use axum::body::{Body, Bytes};
 use futures_util::stream;
 
-use crate::anthropic_request::{inspect_slice, prepare_with_upload_timeout};
+use struson::reader::ReaderError;
+
+use crate::anthropic_request::{AnthropicRequestError, inspect_slice, prepare_with_upload_timeout};
 
 #[tokio::test]
 async fn rejects_request_bodies_that_exceed_the_upload_deadline() {
@@ -55,4 +57,20 @@ fn rejects_duplicate_max_tokens() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn rejects_json_above_the_explicit_nesting_limit() {
+    let nested_value = format!("{}null{}", "[".repeat(129), "]".repeat(129));
+    let request = format!(r#"{{"max_tokens":1,"messages":{nested_value}}}"#);
+
+    let error = inspect_slice(request.as_bytes()).expect_err("deep JSON should be rejected");
+
+    assert!(matches!(
+        error,
+        AnthropicRequestError::InvalidJson(ReaderError::MaxNestingDepthExceeded {
+            max_nesting_depth: 128,
+            ..
+        })
+    ));
 }

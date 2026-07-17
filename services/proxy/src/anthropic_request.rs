@@ -4,7 +4,7 @@ use std::io::{self, BufReader, Seek, SeekFrom, Write};
 
 use axum::body::{Body, Bytes};
 use futures_util::StreamExt;
-use struson::reader::{JsonReader, JsonStreamReader, ValueType};
+use struson::reader::{JsonReader, JsonStreamReader, ReaderSettings, ValueType};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, timeout_at};
 use tokio_util::io::ReaderStream;
@@ -12,6 +12,7 @@ use tokio_util::io::ReaderStream;
 const BODY_CHANNEL_CAPACITY: usize = 4;
 const BODY_CHUNK_BYTES: usize = 16 * 1024;
 const IMAGE_INPUT_TOKEN_RESERVE: u64 = 32_768;
+const MAX_JSON_NESTING_DEPTH: u32 = 128;
 const MAX_SPOOLED_REQUEST_BYTES: u64 = 256 * 1024 * 1024;
 const REQUEST_UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -54,7 +55,10 @@ async fn prepare_anthropic_request_with_timeout(
 
         file.seek(SeekFrom::Start(0))
             .map_err(AnthropicRequestError::SpoolFailed)?;
-        let metadata = inspect_request(JsonStreamReader::new(BufReader::new(&mut file)))?;
+        let metadata = inspect_request(JsonStreamReader::new_custom(
+            BufReader::new(&mut file),
+            reader_settings(),
+        ))?;
         file.seek(SeekFrom::Start(0))
             .map_err(AnthropicRequestError::SpoolFailed)?;
 
@@ -77,6 +81,13 @@ async fn prepare_anthropic_request_with_timeout(
         streaming: metadata.streaming,
         token_budget,
     })
+}
+
+fn reader_settings() -> ReaderSettings {
+    ReaderSettings {
+        max_nesting_depth: Some(MAX_JSON_NESTING_DEPTH),
+        ..ReaderSettings::default()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -388,7 +399,7 @@ impl Error for AnthropicRequestError {
 
 #[cfg(test)]
 pub(crate) fn inspect_slice(body: &[u8]) -> Result<(bool, u64, u64), AnthropicRequestError> {
-    let metadata = inspect_request(JsonStreamReader::new(body))?;
+    let metadata = inspect_request(JsonStreamReader::new_custom(body, reader_settings()))?;
     Ok((
         metadata.streaming,
         metadata.max_tokens,
