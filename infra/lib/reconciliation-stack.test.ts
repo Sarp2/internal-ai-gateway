@@ -59,10 +59,25 @@ test('denies non-SSL access to token reconciliation queues', () => {
 
 test('alarms when token reconciliation jobs reach the dead-letter queue', () => {
 	const template = synthesizeTemplate();
+	const deadLetterQueueLogicalId = Object.entries(template.findResources('AWS::SQS::Queue')).find(
+		([, queue]) => queue.Properties.QueueName === 'internal-ai-gateway-token-reconciliation-dlq',
+	)?.[0];
+
+	if (!deadLetterQueueLogicalId) {
+		throw new Error('token reconciliation dead-letter queue must exist');
+	}
 
 	template.hasResourceProperties('AWS::CloudWatch::Alarm', {
 		AlarmDescription: 'Token reconciliation jobs reached the dead-letter queue.',
 		ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+		Dimensions: [
+			{
+				Name: 'QueueName',
+				Value: {
+					'Fn::GetAtt': [deadLetterQueueLogicalId, 'QueueName'],
+				},
+			},
+		],
 		EvaluationPeriods: 1,
 		MetricName: 'ApproximateNumberOfMessagesVisible',
 		Namespace: 'AWS/SQS',
