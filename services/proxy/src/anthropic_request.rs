@@ -104,7 +104,7 @@ fn inspect_request(
         .begin_object()
         .map_err(AnthropicRequestError::InvalidJson)?;
     let mut max_tokens = None;
-    let mut streaming = false;
+    let mut streaming = None;
     let mut image_inputs = 0_u64;
 
     while reader
@@ -127,9 +127,14 @@ fn inspect_request(
                 );
             }
             "stream" => {
-                streaming = reader
-                    .next_bool()
-                    .map_err(AnthropicRequestError::InvalidJson)?;
+                if streaming.is_some() {
+                    return Err(AnthropicRequestError::DuplicateField("stream"));
+                }
+                streaming = Some(
+                    reader
+                        .next_bool()
+                        .map_err(AnthropicRequestError::InvalidJson)?,
+                );
             }
             _ => {
                 image_inputs = image_inputs
@@ -153,7 +158,7 @@ fn inspect_request(
     Ok(AnthropicRequestMetadata {
         image_inputs,
         max_tokens,
-        streaming,
+        streaming: streaming.unwrap_or(false),
     })
 }
 

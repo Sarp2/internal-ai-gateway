@@ -60,6 +60,19 @@ fn rejects_duplicate_max_tokens() {
 }
 
 #[test]
+fn rejects_duplicate_stream_fields() {
+    let error = inspect_slice(
+        br#"{"model":"claude-sonnet-4-5","max_tokens":100,"stream":true,"stream":false,"messages":[]}"#,
+    )
+    .expect_err("duplicate stream fields must be rejected");
+
+    assert!(matches!(
+        error,
+        AnthropicRequestError::DuplicateField("stream")
+    ));
+}
+
+#[test]
 fn rejects_json_above_the_explicit_nesting_limit() {
     let nested_value = format!("{}null{}", "[".repeat(129), "]".repeat(129));
     let request = format!(r#"{{"max_tokens":1,"messages":{nested_value}}}"#);
