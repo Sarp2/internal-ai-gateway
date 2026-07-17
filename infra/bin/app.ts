@@ -44,6 +44,7 @@ new EcsStack(app, 'InternalAiGatewayEcsStack', {
 new S3Stack(app, 'InternalAiGatewayS3Stack');
 
 if (integrationTestsEnabled) {
+	new NetworkStack(app, 'InternalAiGatewayIntegrationNetworkStack');
 	new DynamoDbStack(app, 'InternalAiGatewayIntegrationDynamoDbStack', {
 		removalPolicy: RemovalPolicy.DESTROY,
 	});
