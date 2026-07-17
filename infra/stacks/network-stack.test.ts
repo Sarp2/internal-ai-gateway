@@ -29,6 +29,18 @@ test('defines private subnets with one NAT gateway for outbound egress', () => {
 	});
 });
 
+test('defines an isolated integration VPC with production topology', () => {
+	const app = new App();
+	new NetworkStack(app, 'ProductionNetworkStack');
+	const integrationStack = new NetworkStack(app, 'IntegrationNetworkStack');
+	const template = Template.fromStack(integrationStack);
+
+	template.resourceCountIs('AWS::EC2::VPC', 1);
+	template.resourceCountIs('AWS::EC2::Subnet', 4);
+	template.resourceCountIs('AWS::EC2::NatGateway', 1);
+	template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const stack = new NetworkStack(app, 'TestNetworkStack');
