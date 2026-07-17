@@ -7,6 +7,7 @@ use crate::token_usage::TokenUsageChecker;
 use crate::token_usage::TokenUsageError;
 use crate::token_usage::daily_usage_window;
 use crate::token_usage::daily_usage_window_start;
+use crate::token_usage::reconciliation_marker_ttl_epoch_seconds;
 use crate::token_usage::token_count_from_attribute;
 use crate::token_usage::token_usage_ttl_epoch_seconds;
 use crate::token_usage::weekly_usage_window;
@@ -46,6 +47,19 @@ fn saturates_token_usage_ttl_for_extreme_values() {
         token_usage_ttl_epoch_seconds(u64::MAX - 1, u64::MAX),
         u64::MAX
     );
+}
+
+#[test]
+fn keeps_reconciliation_markers_for_thirty_days_after_processing() {
+    assert_eq!(
+        reconciliation_marker_ttl_epoch_seconds(100),
+        100 + (30 * 86_400)
+    );
+}
+
+#[test]
+fn saturates_reconciliation_marker_ttl_for_extreme_values() {
+    assert_eq!(reconciliation_marker_ttl_epoch_seconds(u64::MAX), u64::MAX);
 }
 
 #[test]

@@ -18,6 +18,7 @@ const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
 const RECONCILIATION_RECORD_PREFIX: &str = "reconciliation";
+const RECONCILIATION_MARKER_RETENTION_SECONDS: u64 = DAILY_WINDOW_SECONDS * 30;
 
 #[derive(Clone)]
 pub struct TokenUsageChecker {
@@ -110,7 +111,8 @@ impl TokenUsageChecker {
         let daily_window_start = daily_usage_window_start(occurred_at);
         let weekly_window_start = weekly_usage_window_start(occurred_at);
         let reconciliation_window = format!("{RECONCILIATION_RECORD_PREFIX}#{job_id}");
-        let ttl = token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS);
+        let weekly_ttl = token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS);
+        let marker_ttl = reconciliation_marker_ttl_epoch_seconds(current_epoch_seconds()?);
 
         let daily_update = self.usage_update(
             user_id,
@@ -126,11 +128,11 @@ impl TokenUsageChecker {
             &weekly_usage_window(occurred_at),
             token_count,
             None,
-            ttl,
+            weekly_ttl,
             TokenUsageError::WeeklyLimitExceeded,
         )?;
 
-        let marker = self.reconciliation_marker(user_id, &reconciliation_window, ttl)?;
+        let marker = self.reconciliation_marker(user_id, &reconciliation_window, marker_ttl)?;
 
         let result = self
             .dynamodb_client
@@ -380,6 +382,10 @@ pub(crate) fn weekly_usage_window_start(epoch_seconds: u64) -> u64 {
 
 pub(crate) fn token_usage_ttl_epoch_seconds(window_start: u64, window_seconds: u64) -> u64 {
     window_start.saturating_add(window_seconds.saturating_mul(2))
+}
+
+pub(crate) fn reconciliation_marker_ttl_epoch_seconds(processed_at: u64) -> u64 {
+    processed_at.saturating_add(RECONCILIATION_MARKER_RETENTION_SECONDS)
 }
 
 pub(crate) fn token_count_from_attribute(
