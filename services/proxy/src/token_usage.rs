@@ -1,13 +1,15 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aws_sdk_dynamodb::Client as DynamoDbClient;
-use aws_sdk_dynamodb::types::{AttributeValue, TransactWriteItem, Update};
+use aws_sdk_dynamodb::types::{AttributeValue, Put, TransactWriteItem, Update};
 
 use crate::engineer_auth::AuthenticatedEngineer;
 
 const DAILY_WINDOW_PREFIX: &str = "daily";
+const CONSUMED_TOKENS_ATTRIBUTE: &str = "consumed_tokens";
 const TOKEN_COUNT_ATTRIBUTE: &str = "token_count";
 const USAGE_WINDOW_ATTRIBUTE: &str = "usage_window";
 const USER_ID_ATTRIBUTE: &str = "user_id";
@@ -15,6 +17,8 @@ const WEEKLY_WINDOW_PREFIX: &str = "weekly";
 const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
+const RECONCILIATION_RECORD_PREFIX: &str = "reconciliation";
+const RECONCILIATION_MARKER_RETENTION_SECONDS: u64 = DAILY_WINDOW_SECONDS * 30;
 
 #[derive(Clone)]
 pub struct TokenUsageChecker {
@@ -91,6 +95,71 @@ impl TokenUsageChecker {
     ) -> Result<(), TokenUsageError> {
         self.record_tokens_with_limit(engineer, token_count, false)
             .await
+    }
+
+    pub(crate) async fn record_reconciliation(
+        &self,
+        job_id: &str,
+        user_id: &str,
+        token_count: u64,
+        occurred_at: u64,
+    ) -> Result<(), TokenUsageError> {
+        if token_count == 0 {
+            return Ok(());
+        }
+
+        let daily_window_start = daily_usage_window_start(occurred_at);
+        let weekly_window_start = weekly_usage_window_start(occurred_at);
+        let reconciliation_window = format!("{RECONCILIATION_RECORD_PREFIX}#{job_id}");
+        let weekly_ttl = token_usage_ttl_epoch_seconds(weekly_window_start, WEEKLY_WINDOW_SECONDS);
+        let marker_ttl = reconciliation_marker_ttl_epoch_seconds(current_epoch_seconds()?);
+
+        let daily_update = self.usage_update(
+            user_id,
+            &daily_usage_window(occurred_at),
+            token_count,
+            None,
+            token_usage_ttl_epoch_seconds(daily_window_start, DAILY_WINDOW_SECONDS),
+            TokenUsageError::DailyLimitExceeded,
+        )?;
+
+        let weekly_update = self.usage_update(
+            user_id,
+            &weekly_usage_window(occurred_at),
+            token_count,
+            None,
+            weekly_ttl,
+            TokenUsageError::WeeklyLimitExceeded,
+        )?;
+
+        let marker = self.reconciliation_marker(user_id, &reconciliation_window, marker_ttl)?;
+
+        let result = self
+            .dynamodb_client
+            .transact_write_items()
+            .client_request_token(job_id)
+            .transact_items(TransactWriteItem::builder().update(daily_update).build())
+            .transact_items(TransactWriteItem::builder().update(weekly_update).build())
+            .transact_items(TransactWriteItem::builder().put(marker).build())
+            .send()
+            .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(source)
+                if source
+                    .as_service_error()
+                    .is_some_and(|error| error.is_transaction_canceled_exception())
+                    && self
+                        .reconciliation_marker_exists(user_id, &reconciliation_window)
+                        .await? =>
+            {
+                Ok(())
+            }
+            Err(source) => Err(TokenUsageError::WriteFailed {
+                source: Box::new(source),
+            }),
+        }
     }
 
     async fn record_tokens_with_limit(
@@ -183,6 +252,59 @@ impl TokenUsageChecker {
             .map(|tokens| tokens.unwrap_or(0))
     }
 
+    async fn reconciliation_marker_exists(
+        &self,
+        user_id: &str,
+        reconciliation_window: &str,
+    ) -> Result<bool, TokenUsageError> {
+        self.dynamodb_client
+            .get_item()
+            .table_name(&self.table_name)
+            .key(USER_ID_ATTRIBUTE, AttributeValue::S(user_id.to_string()))
+            .key(
+                USAGE_WINDOW_ATTRIBUTE,
+                AttributeValue::S(reconciliation_window.to_string()),
+            )
+            .consistent_read(true)
+            .send()
+            .await
+            .map(|output| output.item.is_some())
+            .map_err(|source| TokenUsageError::ReadFailed {
+                source: Box::new(source),
+            })
+    }
+
+    fn reconciliation_marker(
+        &self,
+        user_id: &str,
+        reconciliation_window: &str,
+        ttl: u64,
+    ) -> Result<Put, TokenUsageError> {
+        Put::builder()
+            .table_name(&self.table_name)
+            .set_item(Some(HashMap::from([
+                (
+                    USER_ID_ATTRIBUTE.to_string(),
+                    AttributeValue::S(user_id.to_string()),
+                ),
+                (
+                    USAGE_WINDOW_ATTRIBUTE.to_string(),
+                    AttributeValue::S(reconciliation_window.to_string()),
+                ),
+                (
+                    "record_type".to_string(),
+                    AttributeValue::S("usage_reconciliation".to_string()),
+                ),
+                ("ttl".to_string(), AttributeValue::N(ttl.to_string())),
+            ])))
+            .condition_expression("attribute_not_exists(#usage_window)")
+            .expression_attribute_names("#usage_window", USAGE_WINDOW_ATTRIBUTE)
+            .build()
+            .map_err(|source| TokenUsageError::BuildWriteFailed {
+                source: Box::new(source),
+            })
+    }
+
     fn usage_update(
         &self,
         user_id: &str,
@@ -199,7 +321,8 @@ impl TokenUsageChecker {
                 USAGE_WINDOW_ATTRIBUTE,
                 AttributeValue::S(usage_window.to_string()),
             )
-            .update_expression("SET #ttl = :ttl ADD #token_count :tokens")
+            .update_expression("SET #ttl = :ttl ADD #token_count :tokens, #consumed_tokens :tokens")
+            .expression_attribute_names("#consumed_tokens", CONSUMED_TOKENS_ATTRIBUTE)
             .expression_attribute_names("#token_count", TOKEN_COUNT_ATTRIBUTE)
             .expression_attribute_names("#ttl", "ttl")
             .expression_attribute_values(":tokens", AttributeValue::N(token_count.to_string()))
@@ -261,6 +384,10 @@ pub(crate) fn token_usage_ttl_epoch_seconds(window_start: u64, window_seconds: u
     window_start.saturating_add(window_seconds.saturating_mul(2))
 }
 
+pub(crate) fn reconciliation_marker_ttl_epoch_seconds(processed_at: u64) -> u64 {
+    processed_at.saturating_add(RECONCILIATION_MARKER_RETENTION_SECONDS)
+}
+
 pub(crate) fn token_count_from_attribute(
     attribute: &AttributeValue,
 ) -> Result<u64, TokenUsageError> {
@@ -272,7 +399,7 @@ pub(crate) fn token_count_from_attribute(
     }
 }
 
-fn current_epoch_seconds() -> Result<u64, TokenUsageError> {
+pub(crate) fn current_epoch_seconds() -> Result<u64, TokenUsageError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())

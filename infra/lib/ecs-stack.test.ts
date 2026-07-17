@@ -6,6 +6,7 @@ import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { DynamoDbStack } from './dynamodb-stack.ts';
 import { EcsStack } from './ecs-stack.ts';
 import { NetworkStack } from './network-stack.ts';
+import { ReconciliationStack } from './reconciliation-stack.ts';
 
 type SynthesizedResource = {
 	Type?: string;
@@ -48,6 +49,9 @@ test('defines a Fargate task definition for the proxy container', () => {
 	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
 		Family: 'internal-ai-gateway-proxy',
 		Cpu: '512',
+		EphemeralStorage: {
+			SizeInGiB: 100,
+		},
 		Memory: '1024',
 		NetworkMode: 'awsvpc',
 		RequiresCompatibilities: ['FARGATE'],
@@ -84,6 +88,14 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: '200',
 					},
 					{
+						Name: 'OPENAI_API_KEY_SECRET_ARN',
+						Value: Match.anyValue(),
+					},
+					{
+						Name: 'OPENAI_DEFAULT_MAX_COMPLETION_TOKENS',
+						Value: '32768',
+					},
+					{
 						Name: 'PORT',
 						Value: '8080',
 					},
@@ -105,6 +117,10 @@ test('defines the proxy container port and runtime environment', () => {
 					},
 					{
 						Name: 'TOKEN_USAGE_TABLE_NAME',
+						Value: Match.anyValue(),
+					},
+					{
+						Name: 'TOKEN_RECONCILIATION_QUEUE_URL',
 						Value: Match.anyValue(),
 					},
 					{
@@ -507,6 +523,33 @@ test('allows proxy tasks to read and update token usage windows', () => {
 	});
 });
 
+test('allows proxy tasks to publish and consume token reconciliation jobs', () => {
+	const template = synthesizeTemplate();
+
+	template.hasResourceProperties('AWS::IAM::Policy', {
+		PolicyDocument: {
+			Statement: Match.arrayWith([
+				Match.objectLike({
+					Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes', 'sqs:GetQueueUrl'],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+				Match.objectLike({
+					Action: [
+						'sqs:ReceiveMessage',
+						'sqs:ChangeMessageVisibility',
+						'sqs:GetQueueUrl',
+						'sqs:DeleteMessage',
+						'sqs:GetQueueAttributes',
+					],
+					Effect: 'Allow',
+					Resource: Match.anyValue(),
+				}),
+			]),
+		},
+	});
+});
+
 test('defines active-stream target tracking for proxy tasks', () => {
 	const template = synthesizeTemplate();
 
@@ -633,17 +676,21 @@ function synthesizeTemplate(
 	const app = new App();
 	const dynamoDbStack = new DynamoDbStack(app, 'TestDynamoDbStack');
 	const networkStack = new NetworkStack(app, 'TestNetworkStack');
+	const reconciliationStack = new ReconciliationStack(app, 'TestReconciliationStack');
 	const secretsStack = new Stack(app, 'TestSecretsStack');
 	const anthropicApiKeySecret = new Secret(secretsStack, 'AnthropicApiKeySecret');
+	const openAiApiKeySecret = new Secret(secretsStack, 'OpenAiApiKeySecret');
 	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
 		anthropicApiKeySecret,
 		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: dynamoDbStack.engineersTable,
+		openAiApiKeySecret,
 		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		proxyApiKeyHashSecret,
 		rateLimitTable: dynamoDbStack.rateLimitTable,
+		tokenReconciliationQueue: reconciliationStack.tokenReconciliationQueue,
 		tokenUsageTable: dynamoDbStack.tokenUsageTable,
 		vpc: networkStack.vpc,
 	});

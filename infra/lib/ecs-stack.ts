@@ -40,6 +40,7 @@ import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import type { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import type { IQueue } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -60,10 +61,12 @@ type EcsStackProps = StackProps & {
 	anthropicApiKeySecret: Secret;
 	engineersApiKeyIndexName: string;
 	engineersTable: Table;
+	openAiApiKeySecret: Secret;
 	proxyApiKeyHashSecret: Secret;
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
 	rateLimitTable: Table;
+	tokenReconciliationQueue: IQueue;
 	tokenUsageTable: Table;
 	vpc: Vpc;
 };
@@ -126,6 +129,7 @@ export class EcsStack extends Stack {
 		this.proxyTaskDefinition = new FargateTaskDefinition(this, 'ProxyTaskDefinition', {
 			family: proxyServiceName,
 			cpu: 512,
+			ephemeralStorageGiB: 100,
 			memoryLimitMiB: 1024,
 		});
 
@@ -140,9 +144,13 @@ export class EcsStack extends Stack {
 				},
 			}),
 		);
+		props.tokenReconciliationQueue.grantSendMessages(this.proxyTaskDefinition.taskRole);
+		props.tokenReconciliationQueue.grantConsumeMessages(this.proxyTaskDefinition.taskRole);
 
 		props.anthropicApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
+		props.openAiApiKeySecret.grantRead(this.proxyTaskDefinition.taskRole);
 		props.proxyApiKeyHashSecret.grantRead(this.proxyTaskDefinition.taskRole);
+
 		this.proxyTaskDefinition.addToTaskRolePolicy(
 			new PolicyStatement({
 				actions: ['dynamodb:Query'],
@@ -185,12 +193,15 @@ export class EcsStack extends Stack {
 				ENGINEERS_API_KEY_INDEX_NAME: props.engineersApiKeyIndexName,
 				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
+				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
+				OPENAI_DEFAULT_MAX_COMPLETION_TOKENS: '32768',
 				PORT: String(proxyContainerPort),
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
 				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,
 				RATE_LIMIT_WINDOW_SECONDS: '60',
 				TOKEN_USAGE_TABLE_NAME: props.tokenUsageTable.tableName,
+				TOKEN_RECONCILIATION_QUEUE_URL: props.tokenReconciliationQueue.queueUrl,
 				RUST_LOG: 'info',
 			},
 			logging: LogDrivers.awsLogs({

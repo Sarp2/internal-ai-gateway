@@ -20,9 +20,18 @@ fn uses_defaults_when_env_values_are_missing() {
     assert_eq!(config.rate_limit_window, Duration::from_secs(60));
     assert_eq!(config.token_usage_table_name, "token-usage");
     assert_eq!(
+        config.token_reconciliation_queue_url,
+        "https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation"
+    );
+    assert_eq!(
         config.anthropic_api_key_secret_arn,
         "arn:aws:secretsmanager:anthropic-api-key"
     );
+    assert_eq!(
+        config.openai_api_key_secret_arn,
+        "arn:aws:secretsmanager:openai-api-key"
+    );
+    assert_eq!(config.openai_default_max_completion_tokens, 32_768);
 }
 
 #[test]
@@ -38,7 +47,10 @@ fn parses_env_values() {
         "RATE_LIMIT_TABLE_NAME" => Some("custom-rate-limits".to_string()),
         "RATE_LIMIT_WINDOW_SECONDS" => Some("120".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("custom-token-usage".to_string()),
+        "TOKEN_RECONCILIATION_QUEUE_URL" => Some("https://sqs.example/custom".to_string()),
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
+        "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
+        "OPENAI_DEFAULT_MAX_COMPLETION_TOKENS" => Some("65536".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -57,9 +69,18 @@ fn parses_env_values() {
     assert_eq!(config.rate_limit_window, Duration::from_secs(120));
     assert_eq!(config.token_usage_table_name, "custom-token-usage");
     assert_eq!(
+        config.token_reconciliation_queue_url,
+        "https://sqs.example/custom"
+    );
+    assert_eq!(
         config.anthropic_api_key_secret_arn,
         "arn:aws:secretsmanager:anthropic"
     );
+    assert_eq!(
+        config.openai_api_key_secret_arn,
+        "arn:aws:secretsmanager:openai"
+    );
+    assert_eq!(config.openai_default_max_completion_tokens, 65_536);
 }
 
 #[test]
@@ -72,7 +93,11 @@ fn falls_back_to_defaults_for_invalid_env_values() {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "TOKEN_RECONCILIATION_QUEUE_URL" => {
+            Some("https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation".to_string())
+        }
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
+        "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
         _ => Some("invalid".to_string()),
     })
     .expect("config should parse");
@@ -89,6 +114,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
     let config = ProxyConfig::from_values(|name| match name {
         "MAX_ACTIVE_STREAMS"
         | "ACTIVE_STREAM_METRIC_INTERVAL_SECONDS"
+        | "OPENAI_DEFAULT_MAX_COMPLETION_TOKENS"
         | "RATE_LIMIT_REQUESTS_PER_WINDOW"
         | "RATE_LIMIT_WINDOW_SECONDS" => Some("0".to_string()),
         "ENGINEERS_TABLE_NAME" => Some("engineers".to_string()),
@@ -98,7 +124,11 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "TOKEN_RECONCILIATION_QUEUE_URL" => {
+            Some("https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation".to_string())
+        }
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
+        "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -107,6 +137,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
     assert_eq!(config.metric_interval, Duration::from_secs(1));
     assert_eq!(config.rate_limit_requests_per_window, 1);
     assert_eq!(config.rate_limit_window, Duration::from_secs(1));
+    assert_eq!(config.openai_default_max_completion_tokens, 1);
 }
 
 #[test]
@@ -117,6 +148,7 @@ fn rejects_missing_proxy_api_key_hash_secret_arn() {
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
+        "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
         _ => None,
     })
     .expect_err("config should fail");
@@ -136,9 +168,13 @@ fn test_value(name: &str) -> Option<String> {
         }
         "RATE_LIMIT_TABLE_NAME" => Some("rate-limits".to_string()),
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
+        "TOKEN_RECONCILIATION_QUEUE_URL" => {
+            Some("https://sqs.eu-north-1.amazonaws.com/123/token-reconciliation".to_string())
+        }
         "ANTHROPIC_API_KEY_SECRET_ARN" => {
             Some("arn:aws:secretsmanager:anthropic-api-key".to_string())
         }
+        "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai-api-key".to_string()),
         _ => None,
     }
 }

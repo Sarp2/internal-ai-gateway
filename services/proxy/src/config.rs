@@ -6,6 +6,7 @@ use std::time::Duration;
 const DEFAULT_PORT: u16 = 8080;
 const DEFAULT_MAX_ACTIVE_STREAMS: usize = 200;
 const DEFAULT_METRIC_INTERVAL_SECONDS: u64 = 15;
+const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS: u64 = 32_768;
 const DEFAULT_RATE_LIMIT_REQUESTS_PER_WINDOW: u64 = 120;
 const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
 
@@ -17,11 +18,14 @@ pub struct ProxyConfig {
     pub port: u16,
     pub max_active_streams: usize,
     pub metric_interval: Duration,
+    pub openai_api_key_secret_arn: String,
+    pub openai_default_max_completion_tokens: u64,
     pub proxy_api_key_hash_secret_arn: String,
     pub rate_limit_requests_per_window: u64,
     pub rate_limit_table_name: String,
     pub rate_limit_window: Duration,
     pub token_usage_table_name: String,
+    pub token_reconciliation_queue_url: String,
 }
 
 impl ProxyConfig {
@@ -58,6 +62,15 @@ impl ProxyConfig {
                 )
                 .max(1),
             ),
+            openai_api_key_secret_arn: required_value(
+                read_value("OPENAI_API_KEY_SECRET_ARN"),
+                "OPENAI_API_KEY_SECRET_ARN",
+            )?,
+            openai_default_max_completion_tokens: parse_value(
+                read_value("OPENAI_DEFAULT_MAX_COMPLETION_TOKENS"),
+                DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,
+            )
+            .max(1),
             proxy_api_key_hash_secret_arn: required_value(
                 read_value("PROXY_API_KEY_HASH_SECRET_ARN"),
                 "PROXY_API_KEY_HASH_SECRET_ARN",
@@ -81,6 +94,10 @@ impl ProxyConfig {
             token_usage_table_name: required_value(
                 read_value("TOKEN_USAGE_TABLE_NAME"),
                 "TOKEN_USAGE_TABLE_NAME",
+            )?,
+            token_reconciliation_queue_url: required_value(
+                read_value("TOKEN_RECONCILIATION_QUEUE_URL"),
+                "TOKEN_RECONCILIATION_QUEUE_URL",
             )?,
         })
     }
