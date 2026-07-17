@@ -3,34 +3,43 @@ import { Alarm, ComparisonOperator, TreatMissingData } from 'aws-cdk-lib/aws-clo
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
+const defaultQueueNamePrefix = 'internal-ai-gateway-token-reconciliation';
+
+type ReconciliationStackProps = StackProps & {
+	queueNamePrefix?: string;
+	removalPolicy?: RemovalPolicy;
+};
+
 export class ReconciliationStack extends Stack {
 	public readonly tokenReconciliationDeadLetterQueue: Queue;
 	public readonly tokenReconciliationQueue: Queue;
 
-	public constructor(scope: Construct, id: string, props?: StackProps) {
+	public constructor(scope: Construct, id: string, props?: ReconciliationStackProps) {
 		super(scope, id, props);
+		const queueNamePrefix = props?.queueNamePrefix ?? defaultQueueNamePrefix;
+		const removalPolicy = props?.removalPolicy ?? RemovalPolicy.RETAIN;
 
 		this.tokenReconciliationDeadLetterQueue = new Queue(
 			this,
 			'TokenReconciliationDeadLetterQueue',
 			{
-				queueName: 'internal-ai-gateway-token-reconciliation-dlq',
+				queueName: `${queueNamePrefix}-dlq`,
 				encryption: QueueEncryption.SQS_MANAGED,
 				enforceSSL: true,
-				removalPolicy: RemovalPolicy.RETAIN,
+				removalPolicy,
 				retentionPeriod: Duration.days(14),
 			},
 		);
 
 		this.tokenReconciliationQueue = new Queue(this, 'TokenReconciliationQueue', {
-			queueName: 'internal-ai-gateway-token-reconciliation',
+			queueName: queueNamePrefix,
 			deadLetterQueue: {
 				maxReceiveCount: 5,
 				queue: this.tokenReconciliationDeadLetterQueue,
 			},
 			encryption: QueueEncryption.SQS_MANAGED,
 			enforceSSL: true,
-			removalPolicy: RemovalPolicy.RETAIN,
+			removalPolicy,
 			receiveMessageWaitTime: Duration.seconds(20),
 			retentionPeriod: Duration.days(1),
 			visibilityTimeout: Duration.minutes(5),
