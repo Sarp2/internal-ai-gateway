@@ -20,7 +20,10 @@ const dynamoDbStack = new DynamoDbStack(app, 'InternalAiGatewayDynamoDbStack', {
 });
 new LambdaStack(app, 'InternalAiGatewayLambdaStack');
 const networkStack = new NetworkStack(app, 'InternalAiGatewayNetworkStack');
-const reconciliationStack = new ReconciliationStack(app, 'InternalAiGatewayReconciliationStack');
+const reconciliationStack = new ReconciliationStack(app, 'InternalAiGatewayReconciliationStack', {
+	queueNamePrefix: 'internal-ai-gateway-token-reconciliation',
+	removalPolicy: RemovalPolicy.RETAIN,
+});
 const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack');
 new EcsStack(app, 'InternalAiGatewayEcsStack', {
 	anthropicApiKeySecret: secretsStack.anthropicApiKeySecret,
@@ -39,6 +42,10 @@ new S3Stack(app, 'InternalAiGatewayS3Stack');
 
 if (integrationTestsEnabled) {
 	new DynamoDbStack(app, 'InternalAiGatewayIntegrationDynamoDbStack', {
+		removalPolicy: RemovalPolicy.DESTROY,
+	});
+	new ReconciliationStack(app, 'InternalAiGatewayIntegrationReconciliationStack', {
+		queueNamePrefix: 'internal-ai-gateway-integration-token-reconciliation',
 		removalPolicy: RemovalPolicy.DESTROY,
 	});
 }
