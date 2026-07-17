@@ -1,0 +1,23 @@
+services/proxy/src/token_usage.rs
+  s_c26b496cd2589a::t_cc5c2bc343a448 21,114-115,131,135,387-388
+  s_c26b496cd2589a::t_c7a7757661c941 389-390
+services/proxy/src/token_usage_test.rs
+  s_c26b496cd2589a::t_cc5c2bc343a448 10,52-63
+  s_c26b496cd2589a::t_8d90265d6c7d7e 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "94f7a2ed3bac1d49ba219db09ee8f39be2dac5bd",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
