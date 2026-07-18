@@ -20,6 +20,7 @@ pub struct ProxyConfig {
     pub metric_interval: Duration,
     pub openai_api_key_secret_arn: String,
     pub openai_default_max_completion_tokens: u64,
+    pub proxy_service_name: String,
     pub proxy_api_key_hash_secret_arn: String,
     pub rate_limit_requests_per_window: u64,
     pub rate_limit_table_name: String,
@@ -71,6 +72,10 @@ impl ProxyConfig {
                 DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,
             )
             .max(1),
+            proxy_service_name: required_value(
+                read_value("PROXY_SERVICE_NAME"),
+                "PROXY_SERVICE_NAME",
+            )?,
             proxy_api_key_hash_secret_arn: required_value(
                 read_value("PROXY_API_KEY_HASH_SECRET_ARN"),
                 "PROXY_API_KEY_HASH_SECRET_ARN",

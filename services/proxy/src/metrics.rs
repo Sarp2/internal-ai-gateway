@@ -9,12 +9,12 @@ use crate::streams::ActiveStreamTracker;
 
 const METRIC_NAMESPACE: &str = "InternalAiGateway/Proxy";
 const ACTIVE_STREAMS_METRIC_NAME: &str = "ActiveStreams";
-const SERVICE_NAME: &str = "internal-ai-gateway-proxy";
 
 pub fn start_active_stream_metric_publisher(
     stream_tracker: Arc<ActiveStreamTracker>,
     interval_duration: Duration,
     cloudwatch_client: CloudWatchClient,
+    service_name: String,
 ) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(interval_duration);
@@ -23,8 +23,12 @@ pub fn start_active_stream_metric_publisher(
         loop {
             interval.tick().await;
 
-            if let Err(error) =
-                publish_active_stream_metric(&cloudwatch_client, stream_tracker.current()).await
+            if let Err(error) = publish_active_stream_metric(
+                &cloudwatch_client,
+                stream_tracker.current(),
+                &service_name,
+            )
+            .await
             {
                 tracing::warn!(%error, "failed to publish active stream metric");
             }
@@ -35,6 +39,7 @@ pub fn start_active_stream_metric_publisher(
 async fn publish_active_stream_metric(
     cloudwatch_client: &CloudWatchClient,
     active_streams: usize,
+    service_name: &str,
 ) -> Result<(), aws_sdk_cloudwatch::Error> {
     let metric = MetricDatum::builder()
         .metric_name(ACTIVE_STREAMS_METRIC_NAME)
@@ -44,7 +49,7 @@ async fn publish_active_stream_metric(
         .dimensions(
             Dimension::builder()
                 .name("ServiceName")
-                .value(SERVICE_NAME)
+                .value(service_name)
                 .build(),
         )
         .build();

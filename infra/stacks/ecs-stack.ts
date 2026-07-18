@@ -206,6 +206,7 @@ export class EcsStack extends Stack {
 				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
 				OPENAI_DEFAULT_MAX_COMPLETION_TOKENS: '32768',
 				PORT: String(proxyContainerPort),
+				PROXY_SERVICE_NAME: this.proxyResourceName,
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
 				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,

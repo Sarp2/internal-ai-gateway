@@ -100,6 +100,10 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: '8080',
 					},
 					{
+						Name: 'PROXY_SERVICE_NAME',
+						Value: 'internal-ai-gateway-proxy',
+					},
+					{
 						Name: 'PROXY_API_KEY_HASH_SECRET_ARN',
 						Value: Match.anyValue(),
 					},
@@ -682,6 +686,16 @@ test('defines an isolated integration proxy with production behavior', () => {
 	});
 	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
 		Family: 'internal-ai-gateway-integration-proxy',
+		ContainerDefinitions: [
+			Match.objectLike({
+				Environment: Match.arrayWith([
+					{
+						Name: 'PROXY_SERVICE_NAME',
+						Value: 'internal-ai-gateway-integration-proxy',
+					},
+				]),
+			}),
+		],
 	});
 	template.hasResourceProperties('AWS::ECS::Service', {
 		DesiredCount: 3,
