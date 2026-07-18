@@ -31,7 +31,6 @@ use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
 use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
-const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 const INTERNAL_API_KEY_HEADER: &str = "x-api-key";
 const STREAM_CHANNEL_CAPACITY: usize = 8;
 
@@ -41,10 +40,11 @@ type ProxyStreamItem = Result<Bytes, Box<dyn Error + Send + Sync>>;
 pub struct AnthropicProxy {
     api_key: Arc<str>,
     http_client: HttpClient,
+    messages_url: Arc<str>,
 }
 
 impl AnthropicProxy {
-    pub fn new(api_key: impl Into<Arc<str>>) -> Self {
+    pub fn new(api_key: impl Into<Arc<str>>, base_url: &str) -> Self {
         Self {
             api_key: api_key.into(),
             http_client: HttpClient::builder()
@@ -54,6 +54,7 @@ impl AnthropicProxy {
                 .redirect(Policy::none())
                 .build()
                 .expect("Anthropic HTTP client configuration should be valid"),
+            messages_url: provider_url(base_url, "/v1/messages").into(),
         }
     }
 
@@ -77,7 +78,7 @@ impl AnthropicProxy {
         let request_connection_headers = ConnectionHeaderNames::from_headers(&parts.headers);
         let mut provider_request = self
             .http_client
-            .post(ANTHROPIC_MESSAGES_URL)
+            .post(self.messages_url.as_ref())
             .header(INTERNAL_API_KEY_HEADER, self.api_key.as_ref());
 
         for (name, value) in parts.headers.iter() {
@@ -504,6 +505,7 @@ impl ConnectionHeaderNames {
 pub async fn load_anthropic_proxy(
     secrets_client: &SecretsManagerClient,
     secret_arn: &str,
+    base_url: &str,
 ) -> Result<AnthropicProxy, AnthropicSecretError> {
     let output = secrets_client
         .get_secret_value()
@@ -522,7 +524,7 @@ pub async fn load_anthropic_proxy(
         return Err(AnthropicSecretError::EmptySecretString);
     }
 
-    Ok(AnthropicProxy::new(api_key.to_string()))
+    Ok(AnthropicProxy::new(api_key.to_string(), base_url))
 }
 
 #[derive(Debug)]
@@ -703,7 +705,11 @@ impl Error for AnthropicSecretError {
 
 #[cfg(test)]
 pub(crate) fn test_proxy(api_key: &str) -> AnthropicProxy {
-    AnthropicProxy::new(api_key.to_string())
+    AnthropicProxy::new(api_key.to_string(), "https://api.anthropic.com")
+}
+
+fn provider_url(base_url: &str, path: &str) -> String {
+    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 #[cfg(test)]

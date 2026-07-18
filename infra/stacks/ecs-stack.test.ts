@@ -76,6 +76,10 @@ test('defines the proxy container port and runtime environment', () => {
 						Value: Match.anyValue(),
 					},
 					{
+						Name: 'ANTHROPIC_BASE_URL',
+						Value: 'https://api.anthropic.com',
+					},
+					{
 						Name: 'ENGINEERS_API_KEY_INDEX_NAME',
 						Value: 'ApiKeyIndex',
 					},
@@ -90,6 +94,10 @@ test('defines the proxy container port and runtime environment', () => {
 					{
 						Name: 'OPENAI_API_KEY_SECRET_ARN',
 						Value: Match.anyValue(),
+					},
+					{
+						Name: 'OPENAI_BASE_URL',
+						Value: 'https://api.openai.com',
 					},
 					{
 						Name: 'OPENAI_DEFAULT_MAX_COMPLETION_TOKENS',
@@ -676,6 +684,8 @@ test('uses the configured proxy domain in the health URL output', () => {
 
 test('defines an isolated integration proxy with production behavior', () => {
 	const template = synthesizeTemplate({
+		anthropicBaseUrl: 'http://anthropic-provider-mock.integration.internal',
+		openAiBaseUrl: 'http://openai-provider-mock.integration.internal',
 		proxyLogGroupName: '/internal-ai-gateway/integration/proxy',
 		proxyResourceName: 'internal-ai-gateway-integration-proxy',
 		removalPolicy: RemovalPolicy.DESTROY,
@@ -689,6 +699,14 @@ test('defines an isolated integration proxy with production behavior', () => {
 		ContainerDefinitions: [
 			Match.objectLike({
 				Environment: Match.arrayWith([
+					{
+						Name: 'ANTHROPIC_BASE_URL',
+						Value: 'http://anthropic-provider-mock.integration.internal',
+					},
+					{
+						Name: 'OPENAI_BASE_URL',
+						Value: 'http://openai-provider-mock.integration.internal',
+					},
 					{
 						Name: 'PROXY_SERVICE_NAME',
 						Value: 'internal-ai-gateway-integration-proxy',
@@ -748,6 +766,8 @@ test('destroys integration proxy logs with the stack', () => {
 
 function synthesizeTemplate(
 	props: {
+		anthropicBaseUrl?: string;
+		openAiBaseUrl?: string;
 		proxyCertificateArn?: string;
 		proxyDomainName?: string;
 		proxyLogGroupName?: string;
@@ -765,9 +785,11 @@ function synthesizeTemplate(
 	const proxyApiKeyHashSecret = new Secret(secretsStack, 'ProxyApiKeyHashSecret');
 	const ecsStack = new EcsStack(app, 'TestEcsStack', {
 		anthropicApiKeySecret,
+		anthropicBaseUrl: props.anthropicBaseUrl ?? 'https://api.anthropic.com',
 		engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: dynamoDbStack.engineersTable,
 		openAiApiKeySecret,
+		openAiBaseUrl: props.openAiBaseUrl ?? 'https://api.openai.com',
 		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		...(props.proxyLogGroupName ? { proxyLogGroupName: props.proxyLogGroupName } : {}),

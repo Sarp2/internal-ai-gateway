@@ -13,12 +13,14 @@ const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
 #[derive(Debug)]
 pub struct ProxyConfig {
     pub anthropic_api_key_secret_arn: String,
+    pub anthropic_base_url: String,
     pub engineers_api_key_index_name: String,
     pub engineers_table_name: String,
     pub port: u16,
     pub max_active_streams: usize,
     pub metric_interval: Duration,
     pub openai_api_key_secret_arn: String,
+    pub openai_base_url: String,
     pub openai_default_max_completion_tokens: u64,
     pub proxy_service_name: String,
     pub proxy_api_key_hash_secret_arn: String,
@@ -41,6 +43,10 @@ impl ProxyConfig {
             anthropic_api_key_secret_arn: required_value(
                 read_value("ANTHROPIC_API_KEY_SECRET_ARN"),
                 "ANTHROPIC_API_KEY_SECRET_ARN",
+            )?,
+            anthropic_base_url: required_value(
+                read_value("ANTHROPIC_BASE_URL"),
+                "ANTHROPIC_BASE_URL",
             )?,
             engineers_api_key_index_name: required_value(
                 read_value("ENGINEERS_API_KEY_INDEX_NAME"),
@@ -67,6 +73,7 @@ impl ProxyConfig {
                 read_value("OPENAI_API_KEY_SECRET_ARN"),
                 "OPENAI_API_KEY_SECRET_ARN",
             )?,
+            openai_base_url: required_value(read_value("OPENAI_BASE_URL"), "OPENAI_BASE_URL")?,
             openai_default_max_completion_tokens: parse_value(
                 read_value("OPENAI_DEFAULT_MAX_COMPLETION_TOKENS"),
                 DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,

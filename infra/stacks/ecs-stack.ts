@@ -60,9 +60,11 @@ const defaultProxyResourceName = 'internal-ai-gateway-proxy';
 
 type EcsStackProps = StackProps & {
 	anthropicApiKeySecret: Secret;
+	anthropicBaseUrl: string;
 	engineersApiKeyIndexName: string;
 	engineersTable: Table;
 	openAiApiKeySecret: Secret;
+	openAiBaseUrl: string;
 	proxyApiKeyHashSecret: Secret;
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
@@ -200,10 +202,12 @@ export class EcsStack extends Stack {
 			environment: {
 				ACTIVE_STREAM_METRIC_INTERVAL_SECONDS: '15',
 				ANTHROPIC_API_KEY_SECRET_ARN: props.anthropicApiKeySecret.secretArn,
+				ANTHROPIC_BASE_URL: props.anthropicBaseUrl,
 				ENGINEERS_API_KEY_INDEX_NAME: props.engineersApiKeyIndexName,
 				ENGINEERS_TABLE_NAME: props.engineersTable.tableName,
 				MAX_ACTIVE_STREAMS: String(proxyMaxActiveStreams),
 				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
+				OPENAI_BASE_URL: props.openAiBaseUrl,
 				OPENAI_DEFAULT_MAX_COMPLETION_TOKENS: '32768',
 				PORT: String(proxyContainerPort),
 				PROXY_SERVICE_NAME: this.proxyResourceName,
