@@ -128,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::clone(&stream_tracker),
         config.metric_interval,
         CloudWatchClient::new(&aws_config),
+        config.proxy_service_name.clone(),
     );
 
     let address = SocketAddr::from(([0, 0, 0, 0], config.port));

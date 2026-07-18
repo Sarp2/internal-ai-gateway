@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { App, Stack } from 'aws-cdk-lib';
+import { App, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { DynamoDbStack } from './dynamodb-stack.ts';
@@ -98,6 +98,10 @@ test('defines the proxy container port and runtime environment', () => {
 					{
 						Name: 'PORT',
 						Value: '8080',
+					},
+					{
+						Name: 'PROXY_SERVICE_NAME',
+						Value: 'internal-ai-gateway-proxy',
 					},
 					{
 						Name: 'PROXY_API_KEY_HASH_SECRET_ARN',
@@ -670,8 +674,86 @@ test('uses the configured proxy domain in the health URL output', () => {
 	});
 });
 
+test('defines an isolated integration proxy with production behavior', () => {
+	const template = synthesizeTemplate({
+		proxyLogGroupName: '/internal-ai-gateway/integration/proxy',
+		proxyResourceName: 'internal-ai-gateway-integration-proxy',
+		removalPolicy: RemovalPolicy.DESTROY,
+	});
+
+	template.hasResourceProperties('AWS::ECS::Cluster', {
+		ClusterName: 'internal-ai-gateway-integration-proxy',
+	});
+	template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+		Family: 'internal-ai-gateway-integration-proxy',
+		ContainerDefinitions: [
+			Match.objectLike({
+				Environment: Match.arrayWith([
+					{
+						Name: 'PROXY_SERVICE_NAME',
+						Value: 'internal-ai-gateway-integration-proxy',
+					},
+				]),
+			}),
+		],
+	});
+	template.hasResourceProperties('AWS::ECS::Service', {
+		DesiredCount: 3,
+		ServiceName: 'internal-ai-gateway-integration-proxy',
+	});
+	template.hasResourceProperties('AWS::Logs::LogGroup', {
+		LogGroupName: '/internal-ai-gateway/integration/proxy',
+		RetentionInDays: 30,
+	});
+	template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+		TargetTrackingScalingPolicyConfiguration: {
+			CustomizedMetricSpecification: {
+				Dimensions: [
+					{
+						Name: 'ServiceName',
+						Value: 'internal-ai-gateway-integration-proxy',
+					},
+				],
+				MetricName: 'ActiveStreams',
+				Namespace: 'InternalAiGateway/Proxy',
+				Statistic: 'Average',
+				Unit: 'Count',
+			},
+		},
+	});
+	template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+		DashboardName: 'internal-ai-gateway-integration-proxy',
+	});
+});
+
+test('destroys integration proxy logs with the stack', () => {
+	const template = synthesizeTemplate({
+		proxyLogGroupName: '/internal-ai-gateway/integration/proxy',
+		proxyResourceName: 'internal-ai-gateway-integration-proxy',
+		removalPolicy: RemovalPolicy.DESTROY,
+	});
+	const buckets = template.findResources('AWS::S3::Bucket');
+	const logGroups = template.findResources('AWS::Logs::LogGroup');
+
+	for (const bucket of Object.values(buckets)) {
+		assert.equal(bucket.DeletionPolicy, 'Delete');
+		assert.equal(bucket.UpdateReplacePolicy, 'Delete');
+	}
+	for (const logGroup of Object.values(logGroups)) {
+		assert.equal(logGroup.DeletionPolicy, 'Delete');
+		assert.equal(logGroup.UpdateReplacePolicy, 'Delete');
+	}
+	template.resourceCountIs('Custom::S3AutoDeleteObjects', 1);
+});
+
 function synthesizeTemplate(
-	props: { proxyCertificateArn?: string; proxyDomainName?: string } = {},
+	props: {
+		proxyCertificateArn?: string;
+		proxyDomainName?: string;
+		proxyLogGroupName?: string;
+		proxyResourceName?: string;
+		removalPolicy?: RemovalPolicy;
+	} = {},
 ): Template {
 	const app = new App();
 	const dynamoDbStack = new DynamoDbStack(app, 'TestDynamoDbStack');
@@ -688,8 +770,11 @@ function synthesizeTemplate(
 		openAiApiKeySecret,
 		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
+		...(props.proxyLogGroupName ? { proxyLogGroupName: props.proxyLogGroupName } : {}),
+		...(props.proxyResourceName ? { proxyResourceName: props.proxyResourceName } : {}),
 		proxyApiKeyHashSecret,
 		rateLimitTable: dynamoDbStack.rateLimitTable,
+		...(props.removalPolicy ? { removalPolicy: props.removalPolicy } : {}),
 		tokenReconciliationQueue: reconciliationStack.tokenReconciliationQueue,
 		tokenUsageTable: dynamoDbStack.tokenUsageTable,
 		vpc: networkStack.vpc,

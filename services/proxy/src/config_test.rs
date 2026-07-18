@@ -9,6 +9,7 @@ fn uses_defaults_when_env_values_are_missing() {
     assert_eq!(config.port, 8080);
     assert_eq!(config.max_active_streams, 200);
     assert_eq!(config.metric_interval, Duration::from_secs(15));
+    assert_eq!(config.proxy_service_name, "internal-ai-gateway-proxy");
     assert_eq!(config.engineers_table_name, "engineers");
     assert_eq!(config.engineers_api_key_index_name, "ApiKeyIndex");
     assert_eq!(
@@ -51,6 +52,7 @@ fn parses_env_values() {
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
         "OPENAI_DEFAULT_MAX_COMPLETION_TOKENS" => Some("65536".to_string()),
+        "PROXY_SERVICE_NAME" => Some("custom-proxy".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -81,6 +83,7 @@ fn parses_env_values() {
         "arn:aws:secretsmanager:openai"
     );
     assert_eq!(config.openai_default_max_completion_tokens, 65_536);
+    assert_eq!(config.proxy_service_name, "custom-proxy");
 }
 
 #[test]
@@ -98,6 +101,7 @@ fn falls_back_to_defaults_for_invalid_env_values() {
         }
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
+        "PROXY_SERVICE_NAME" => Some("internal-ai-gateway-proxy".to_string()),
         _ => Some("invalid".to_string()),
     })
     .expect("config should parse");
@@ -129,6 +133,7 @@ fn clamps_zero_values_that_would_disable_runtime_safety() {
         }
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
+        "PROXY_SERVICE_NAME" => Some("internal-ai-gateway-proxy".to_string()),
         _ => None,
     })
     .expect("config should parse");
@@ -149,6 +154,7 @@ fn rejects_missing_proxy_api_key_hash_secret_arn() {
         "TOKEN_USAGE_TABLE_NAME" => Some("token-usage".to_string()),
         "ANTHROPIC_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:anthropic".to_string()),
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai".to_string()),
+        "PROXY_SERVICE_NAME" => Some("internal-ai-gateway-proxy".to_string()),
         _ => None,
     })
     .expect_err("config should fail");
@@ -175,6 +181,7 @@ fn test_value(name: &str) -> Option<String> {
             Some("arn:aws:secretsmanager:anthropic-api-key".to_string())
         }
         "OPENAI_API_KEY_SECRET_ARN" => Some("arn:aws:secretsmanager:openai-api-key".to_string()),
+        "PROXY_SERVICE_NAME" => Some("internal-ai-gateway-proxy".to_string()),
         _ => None,
     }
 }

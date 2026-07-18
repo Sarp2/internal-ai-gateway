@@ -54,8 +54,9 @@ const proxyActiveStreamsScaleTarget = 150;
 const proxyMaxActiveStreams = 200;
 const activeStreamMetricNamespace = 'InternalAiGateway/Proxy';
 const activeStreamsMetricName = 'ActiveStreams';
-const proxyServiceName = 'internal-ai-gateway-proxy';
 const proxyAccessLogPrefix = 'alb';
+const defaultProxyLogGroupName = '/internal-ai-gateway/proxy';
+const defaultProxyResourceName = 'internal-ai-gateway-proxy';
 
 type EcsStackProps = StackProps & {
 	anthropicApiKeySecret: Secret;
@@ -65,7 +66,10 @@ type EcsStackProps = StackProps & {
 	proxyApiKeyHashSecret: Secret;
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
+	proxyLogGroupName?: string;
+	proxyResourceName?: string;
 	rateLimitTable: Table;
+	removalPolicy?: RemovalPolicy;
 	tokenReconciliationQueue: IQueue;
 	tokenUsageTable: Table;
 	vpc: Vpc;
@@ -81,29 +85,35 @@ export class EcsStack extends Stack {
 	public readonly proxyTaskDefinition: FargateTaskDefinition;
 	public readonly proxyLogGroup: LogGroup;
 	public readonly proxyAccessLogBucket: Bucket;
+	private readonly proxyResourceName: string;
 
 	public constructor(scope: Construct, id: string, props: EcsStackProps) {
 		super(scope, id, props);
+		const proxyLogGroupName = props.proxyLogGroupName ?? defaultProxyLogGroupName;
+		this.proxyResourceName = props.proxyResourceName ?? defaultProxyResourceName;
+		const removalPolicy = props.removalPolicy ?? RemovalPolicy.RETAIN;
 
 		this.cluster = new Cluster(this, 'ProxyCluster', {
 			// CDK's concrete Vpc is compatible with IVpc, but exactOptionalPropertyTypes
 			// rejects one optional property in the upstream type relationship.
 			vpc: props.vpc as IVpc,
-			clusterName: 'internal-ai-gateway-proxy',
+			clusterName: this.proxyResourceName,
 			enableFargateCapacityProviders: true,
 			containerInsightsV2: ContainerInsights.ENHANCED,
 		});
 
 		this.proxyLogGroup = new LogGroup(this, 'ProxyLogGroup', {
-			logGroupName: '/internal-ai-gateway/proxy',
+			logGroupName: proxyLogGroupName,
+			removalPolicy,
 			retention: RetentionDays.ONE_MONTH,
 		});
 
 		this.proxyAccessLogBucket = new Bucket(this, 'ProxyAccessLogBucket', {
+			autoDeleteObjects: removalPolicy === RemovalPolicy.DESTROY,
 			blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
 			encryption: BucketEncryption.S3_MANAGED,
 			enforceSSL: true,
-			removalPolicy: RemovalPolicy.RETAIN,
+			removalPolicy,
 		});
 
 		this.proxyAccessLogBucket.addToResourcePolicy(
@@ -127,7 +137,7 @@ export class EcsStack extends Stack {
 		);
 
 		this.proxyTaskDefinition = new FargateTaskDefinition(this, 'ProxyTaskDefinition', {
-			family: proxyServiceName,
+			family: this.proxyResourceName,
 			cpu: 512,
 			ephemeralStorageGiB: 100,
 			memoryLimitMiB: 1024,
@@ -196,6 +206,7 @@ export class EcsStack extends Stack {
 				OPENAI_API_KEY_SECRET_ARN: props.openAiApiKeySecret.secretArn,
 				OPENAI_DEFAULT_MAX_COMPLETION_TOKENS: '32768',
 				PORT: String(proxyContainerPort),
+				PROXY_SERVICE_NAME: this.proxyResourceName,
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
 				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
 				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,
@@ -224,7 +235,7 @@ export class EcsStack extends Stack {
 		this.proxyService = new FargateService(this, 'ProxyService', {
 			cluster: this.cluster as ICluster,
 			taskDefinition: this.proxyTaskDefinition,
-			serviceName: proxyServiceName,
+			serviceName: this.proxyResourceName,
 			desiredCount: proxyDesiredTaskCount,
 			assignPublicIp: false,
 			vpcSubnets: {
@@ -463,7 +474,7 @@ export class EcsStack extends Stack {
 		});
 
 		new CfnDashboard(this, 'ProxyDashboard', {
-			dashboardName: 'internal-ai-gateway-proxy',
+			dashboardName: this.proxyResourceName,
 			dashboardBody: Stack.of(this).toJsonString({
 				widgets: [
 					{
@@ -487,7 +498,7 @@ export class EcsStack extends Stack {
 									activeStreamMetricNamespace,
 									activeStreamsMetricName,
 									'ServiceName',
-									proxyServiceName,
+									this.proxyResourceName,
 									{ stat: 'Average' },
 								],
 							],
@@ -507,7 +518,7 @@ export class EcsStack extends Stack {
 									'ClusterName',
 									this.cluster.clusterName,
 									'ServiceName',
-									proxyServiceName,
+									this.proxyResourceName,
 								],
 								[
 									'AWS/ECS',
@@ -515,7 +526,7 @@ export class EcsStack extends Stack {
 									'ClusterName',
 									this.cluster.clusterName,
 									'ServiceName',
-									proxyServiceName,
+									this.proxyResourceName,
 								],
 							],
 						},
@@ -579,7 +590,7 @@ export class EcsStack extends Stack {
 			namespace: activeStreamMetricNamespace,
 			metricName: activeStreamsMetricName,
 			dimensionsMap: {
-				ServiceName: proxyServiceName,
+				ServiceName: this.proxyResourceName,
 			},
 			statistic,
 			period: Duration.seconds(60),
