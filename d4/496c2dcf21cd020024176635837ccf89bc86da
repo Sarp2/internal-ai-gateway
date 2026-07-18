@@ -1,0 +1,36 @@
+services/proxy/src/main.rs
+  s_c26b496cd2589a::t_1e277d1cf51f59 101-106,112
+services/proxy/src/config.rs
+  s_c26b496cd2589a::t_1e277d1cf51f59 16,23,47-50,76
+services/proxy/src/anthropic.rs
+  s_c26b496cd2589a::t_1e277d1cf51f59 43,47,57,81,508,527,708-712
+services/proxy/src/openai.rs
+  s_c26b496cd2589a::t_1e277d1cf51f59 44,48-52,55,89,445,466,635-639
+services/proxy/src/config_test.rs
+  s_c26b496cd2589a::t_4a1bdebbbe3b82 13-14,55,57,91-92,109,111,143,145,166,168,195,197
+infra/bin/app.ts
+  s_c26b496cd2589a::t_2a801cac2ed87b 14-15
+  s_c26b496cd2589a::t_1e277d1cf51f59 12-13,43,47
+  s_c26b496cd2589a::t_5826a622a769d6 91,95
+infra/stacks/ecs-stack.test.ts
+  s_c26b496cd2589a::t_4a1bdebbbe3b82 79-81,98-100
+  s_c26b496cd2589a::t_f5b9d91a94f49b 78,101,687-688,702-709,769-770,788,792
+infra/stacks/ecs-stack.ts
+  s_c26b496cd2589a::t_1e277d1cf51f59 63,67,205,210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d4496c2dcf21cd020024176635837ccf89bc86da",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
