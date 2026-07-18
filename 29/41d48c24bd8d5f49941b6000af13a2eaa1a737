@@ -1,0 +1,27 @@
+infra/stacks/ecs-stack.ts
+  s_c26b496cd2589a::t_39754cdb22bd6e 58-59,69-70,72,88,92-94,100,106-107,112,116,140,237,476,500,520,592
+  s_c26b496cd2589a::t_e2554f047a0cea 528
+infra/stacks/ecs-stack.test.ts
+  s_c26b496cd2589a::t_fcb189fcfc4941 3,673-734,736-742,759-760,763
+infra/bin/app.ts
+  s_c26b496cd2589a::t_6df76ee2f23177 65,74,83
+  s_c26b496cd2589a::t_14dd287d03a831 45-46,48,58-64,66-73,75-82,84-92,94-96
+  s_c26b496cd2589a::t_054a45683b53db 57
+  s_c26b496cd2589a::t_e67a554b70c083 12,16,23,26,31,36,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "2941d48c24bd8d5f49941b6000af13a2eaa1a737",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
