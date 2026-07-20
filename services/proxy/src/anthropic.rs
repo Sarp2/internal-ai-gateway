@@ -26,6 +26,7 @@ use crate::app::AppState;
 use crate::auth::AuthError;
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
+use crate::provider_url::provider_url;
 use crate::rate_limit::RateLimitError;
 use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
@@ -706,10 +707,6 @@ impl Error for AnthropicSecretError {
 #[cfg(test)]
 pub(crate) fn test_proxy(api_key: &str) -> AnthropicProxy {
     AnthropicProxy::new(api_key.to_string(), "https://api.anthropic.com")
-}
-
-fn provider_url(base_url: &str, path: &str) -> String {
-    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 #[cfg(test)]

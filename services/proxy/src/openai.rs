@@ -25,6 +25,7 @@ use crate::auth::AuthError;
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai_request::{OpenAiRequestTransformError, prepare_openai_request};
+use crate::provider_url::provider_url;
 use crate::rate_limit::RateLimitError;
 use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
@@ -633,10 +634,6 @@ impl Error for OpenAiSecretError {
 #[cfg(test)]
 pub(crate) fn test_proxy(api_key: &str) -> OpenAiProxy {
     OpenAiProxy::new(api_key.to_string(), "https://api.openai.com", 32_768)
-}
-
-fn provider_url(base_url: &str, path: &str) -> String {
-    format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
 #[cfg(test)]

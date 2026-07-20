@@ -36,6 +36,7 @@ mod health;
 mod metrics;
 pub mod openai;
 mod openai_request;
+mod provider_url;
 pub mod rate_limit;
 mod request_body;
 mod shutdown;

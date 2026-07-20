@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::config::ProxyConfig;
 
 #[test]
-fn uses_defaults_when_env_values_are_missing() {
+fn uses_defaults_for_optional_values() {
     let config = ProxyConfig::from_values(test_value).expect("config should parse");
 
     assert_eq!(config.port, 8080);
