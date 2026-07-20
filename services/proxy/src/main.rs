@@ -36,6 +36,7 @@ mod health;
 mod metrics;
 pub mod openai;
 mod openai_request;
+mod provider_url;
 pub mod rate_limit;
 mod request_body;
 mod shutdown;
@@ -98,12 +99,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         load_api_key_hasher(&secrets_client, &config.proxy_api_key_hash_secret_arn).await?,
     );
     let anthropic_proxy = Arc::new(
-        load_anthropic_proxy(&secrets_client, &config.anthropic_api_key_secret_arn).await?,
+        load_anthropic_proxy(
+            &secrets_client,
+            &config.anthropic_api_key_secret_arn,
+            &config.anthropic_base_url,
+        )
+        .await?,
     );
     let openai_proxy = Arc::new(
         load_openai_proxy(
             &secrets_client,
             &config.openai_api_key_secret_arn,
+            &config.openai_base_url,
             config.openai_default_max_completion_tokens,
         )
         .await?,

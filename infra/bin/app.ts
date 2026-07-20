@@ -9,6 +9,10 @@ import { S3Stack } from '../stacks/s3-stack.ts';
 import { SecretsStack } from '../stacks/secrets-stack.ts';
 
 const app = new App();
+const anthropicBaseUrl = 'https://api.anthropic.com';
+const openAiBaseUrl = 'https://api.openai.com';
+const integrationAnthropicBaseUrl = 'http://anthropic-provider-mock.integration.internal';
+const integrationOpenAiBaseUrl = 'http://openai-provider-mock.integration.internal';
 
 const proxyCertificateArn = app.node.tryGetContext('proxyCertificateArn') as string | undefined;
 const proxyDomainName = app.node.tryGetContext('proxyDomainName') as string | undefined;
@@ -36,9 +40,11 @@ const secretsStack = new SecretsStack(app, 'InternalAiGatewaySecretsStack', {
 
 new EcsStack(app, 'InternalAiGatewayEcsStack', {
 	anthropicApiKeySecret: secretsStack.anthropicApiKeySecret,
+	anthropicBaseUrl,
 	engineersApiKeyIndexName: dynamoDbStack.engineersApiKeyIndexName,
 	engineersTable: dynamoDbStack.engineersTable,
 	openAiApiKeySecret: secretsStack.openAiApiKeySecret,
+	openAiBaseUrl,
 	proxyApiKeyHashSecret: secretsStack.proxyApiKeyHashSecret,
 	...(proxyCertificateArn ? { proxyCertificateArn } : {}),
 	...(proxyDomainName ? { proxyDomainName } : {}),
@@ -80,12 +86,13 @@ if (integrationTestsEnabled) {
 			secretNamePrefix: 'internal-ai-gateway/integration',
 		},
 	);
-
 	new EcsStack(app, 'InternalAiGatewayIntegrationEcsStack', {
 		anthropicApiKeySecret: integrationSecretsStack.anthropicApiKeySecret,
+		anthropicBaseUrl: integrationAnthropicBaseUrl,
 		engineersApiKeyIndexName: integrationDynamoDbStack.engineersApiKeyIndexName,
 		engineersTable: integrationDynamoDbStack.engineersTable,
 		openAiApiKeySecret: integrationSecretsStack.openAiApiKeySecret,
+		openAiBaseUrl: integrationOpenAiBaseUrl,
 		proxyApiKeyHashSecret: integrationSecretsStack.proxyApiKeyHashSecret,
 		proxyLogGroupName: '/internal-ai-gateway/integration/proxy',
 		proxyResourceName: 'internal-ai-gateway-integration-proxy',

@@ -25,12 +25,12 @@ use crate::auth::AuthError;
 use crate::background_tasks::BackgroundTasks;
 use crate::engineer_auth::AuthenticatedEngineer;
 use crate::openai_request::{OpenAiRequestTransformError, prepare_openai_request};
+use crate::provider_url::provider_url;
 use crate::rate_limit::RateLimitError;
 use crate::sse::{event_data as sse_event_data, take_next_event};
 use crate::streams::OwnedActiveStreamGuard;
 use crate::token_reservation::{TokenReservation, TokenReservationError, TokenReservationManager};
 
-const OPENAI_CHAT_COMPLETIONS_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENAI_ORGANIZATION_HEADER: &str = "openai-organization";
 const OPENAI_PROJECT_HEADER: &str = "openai-project";
 const STREAM_CHANNEL_CAPACITY: usize = 8;
@@ -42,12 +42,18 @@ pub struct OpenAiProxy {
     api_key: Arc<str>,
     default_max_completion_tokens: u64,
     http_client: HttpClient,
+    chat_completions_url: Arc<str>,
 }
 
 impl OpenAiProxy {
-    pub fn new(api_key: impl Into<Arc<str>>, default_max_completion_tokens: u64) -> Self {
+    pub fn new(
+        api_key: impl Into<Arc<str>>,
+        base_url: &str,
+        default_max_completion_tokens: u64,
+    ) -> Self {
         Self {
             api_key: api_key.into(),
+            chat_completions_url: provider_url(base_url, "/v1/chat/completions").into(),
             default_max_completion_tokens: default_max_completion_tokens.max(1),
             http_client: HttpClient::builder()
                 .connect_timeout(Duration::from_secs(10))
@@ -81,7 +87,7 @@ impl OpenAiProxy {
         let request_connection_headers = ConnectionHeaderNames::from_headers(&parts.headers);
         let mut provider_request = self
             .http_client
-            .post(OPENAI_CHAT_COMPLETIONS_URL)
+            .post(self.chat_completions_url.as_ref())
             .bearer_auth(self.api_key.as_ref());
 
         for (name, value) in &parts.headers {
@@ -437,6 +443,7 @@ fn usage_from_sse_event(event: &[u8]) -> Option<OpenAiUsage> {
 pub async fn load_openai_proxy(
     secrets_client: &SecretsManagerClient,
     secret_arn: &str,
+    base_url: &str,
     default_max_completion_tokens: u64,
 ) -> Result<OpenAiProxy, OpenAiSecretError> {
     let output = secrets_client
@@ -457,6 +464,7 @@ pub async fn load_openai_proxy(
 
     Ok(OpenAiProxy::new(
         api_key.to_string(),
+        base_url,
         default_max_completion_tokens,
     ))
 }
@@ -625,7 +633,7 @@ impl Error for OpenAiSecretError {
 
 #[cfg(test)]
 pub(crate) fn test_proxy(api_key: &str) -> OpenAiProxy {
-    OpenAiProxy::new(api_key.to_string(), 32_768)
+    OpenAiProxy::new(api_key.to_string(), "https://api.openai.com", 32_768)
 }
 
 #[cfg(test)]
