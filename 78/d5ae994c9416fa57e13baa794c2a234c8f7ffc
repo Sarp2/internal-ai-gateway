@@ -1,0 +1,24 @@
+infra/stacks/service-discovery-stack.test.ts
+  s_c26b496cd2589a::t_f112cff624b2ef 24-26
+  s_c26b496cd2589a::t_72af53a4565ad6 1-23,27-42
+infra/bin/app.ts
+  s_c26b496cd2589a::t_72af53a4565ad6 10,65-67
+infra/stacks/service-discovery-stack.ts
+  s_c26b496cd2589a::t_72af53a4565ad6 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "78d5ae994c9416fa57e13baa794c2a234c8f7ffc",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
