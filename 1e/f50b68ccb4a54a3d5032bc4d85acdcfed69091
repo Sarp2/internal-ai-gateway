@@ -1,0 +1,33 @@
+services/provider-mock/src/main.rs
+  s_c26b496cd2589a::t_e07f858d03a573 1-54
+services/provider-mock/src/app_test.rs
+  s_c26b496cd2589a::t_e07f858d03a573 2-19,21,23-24
+  s_c26b496cd2589a::t_a31279fc751fc4 1,20,22
+services/provider-mock/Dockerfile
+  s_c26b496cd2589a::t_e07f858d03a573 1-26
+package.json
+  s_c26b496cd2589a::t_e07f858d03a573 8,12,14
+services/provider-mock/Cargo.toml
+  s_c26b496cd2589a::t_e07f858d03a573 1-7,9-12
+  s_c26b496cd2589a::t_a31279fc751fc4 8
+services/provider-mock/src/app.rs
+  s_c26b496cd2589a::t_e07f858d03a573 1-12
+services/provider-mock/Cargo.lock
+  s_c26b496cd2589a::t_00e589f2048ff8 1-530
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "1ef50b68ccb4a54a3d5032bc4d85acdcfed69091",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
