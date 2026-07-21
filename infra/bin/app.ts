@@ -7,6 +7,7 @@ import { NetworkStack } from '../stacks/network-stack.ts';
 import { ReconciliationStack } from '../stacks/reconciliation-stack.ts';
 import { S3Stack } from '../stacks/s3-stack.ts';
 import { SecretsStack } from '../stacks/secrets-stack.ts';
+import { ServiceDiscoveryStack } from '../stacks/service-discovery-stack.ts';
 
 const app = new App();
 const anthropicBaseUrl = 'https://api.anthropic.com';
@@ -61,6 +62,9 @@ new S3Stack(app, 'InternalAiGatewayS3Stack');
 
 if (integrationTestsEnabled) {
 	const integrationNetworkStack = new NetworkStack(app, 'InternalAiGatewayIntegrationNetworkStack');
+	new ServiceDiscoveryStack(app, 'InternalAiGatewayIntegrationServiceDiscoveryStack', {
+		vpc: integrationNetworkStack.vpc,
+	});
 	const integrationDynamoDbStack = new DynamoDbStack(
 		app,
 		'InternalAiGatewayIntegrationDynamoDbStack',
