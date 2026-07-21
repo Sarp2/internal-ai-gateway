@@ -5,13 +5,13 @@
 	"description": "Internal AI gateway for routing engineer traffic to provider APIs.",
 	"packageManager": "pnpm@10.25.0",
 	"scripts": {
-		"check": "pnpm typecheck && cargo check --manifest-path services/proxy/Cargo.toml",
+		"check": "pnpm typecheck && cargo check --manifest-path services/proxy/Cargo.toml && cargo check --manifest-path services/provider-mock/Cargo.toml",
 		"cdk": "pnpm --filter @internal-ai-gateway/infra cdk",
 		"format": "biome format --write .",
 		"format:check": "biome format .",
-		"lint": "biome check . && cargo fmt --manifest-path services/proxy/Cargo.toml --check && cargo clippy --manifest-path services/proxy/Cargo.toml --all-targets -- -D warnings",
+		"lint": "biome check . && cargo fmt --manifest-path services/proxy/Cargo.toml --check && cargo clippy --manifest-path services/proxy/Cargo.toml --all-targets -- -D warnings && cargo fmt --manifest-path services/provider-mock/Cargo.toml --check && cargo clippy --manifest-path services/provider-mock/Cargo.toml --all-targets -- -D warnings",
 		"synth": "pnpm --filter @internal-ai-gateway/infra synth",
-		"test": "find functions infra services shared -path '*/cdk.out/*' -prune -o -name '*.test.ts' -print | xargs node --test && cargo test --manifest-path services/proxy/Cargo.toml",
+		"test": "find functions infra services shared -path '*/cdk.out/*' -prune -o -name '*.test.ts' -print | xargs node --test && cargo test --manifest-path services/proxy/Cargo.toml && cargo test --manifest-path services/provider-mock/Cargo.toml",
 		"typecheck": "pnpm -r typecheck"
 	},
 	"engines": {
