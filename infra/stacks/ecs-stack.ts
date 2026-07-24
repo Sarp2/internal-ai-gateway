@@ -193,6 +193,7 @@ export class EcsStack extends Stack {
 					'dist',
 					'infra/cdk.out',
 					'node_modules',
+					'services/provider-mock/target',
 					'services/proxy/target',
 					'target',
 				],
