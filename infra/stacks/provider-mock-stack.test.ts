@@ -112,14 +112,22 @@ test('allows only the integration proxy security group on each mock port', () =>
 		Description: 'Allow Anthropic mock requests from the integration proxy.',
 		FromPort: 8080,
 		IpProtocol: 'tcp',
-		SourceSecurityGroupId: Match.anyValue(),
+		SourceSecurityGroupId: {
+			'Fn::ImportValue': Match.stringLikeRegexp(
+				'TestIntegrationResourcesStack:ExportsOutputFnGetAttTestProxySecurityGroup.*GroupId',
+			),
+		},
 		ToPort: 8080,
 	});
 	template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
 		Description: 'Allow OpenAI mock requests from the integration proxy.',
 		FromPort: 8080,
 		IpProtocol: 'tcp',
-		SourceSecurityGroupId: Match.anyValue(),
+		SourceSecurityGroupId: {
+			'Fn::ImportValue': Match.stringLikeRegexp(
+				'TestIntegrationResourcesStack:ExportsOutputFnGetAttTestProxySecurityGroup.*GroupId',
+			),
+		},
 		ToPort: 8080,
 	});
 });
