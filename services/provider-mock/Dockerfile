@@ -1,5 +1,7 @@
 FROM rust:1-alpine AS build
 
+ENV CARGO_TARGET_DIR=/app/target
+
 WORKDIR /app
 
 RUN apk add --no-cache build-base
