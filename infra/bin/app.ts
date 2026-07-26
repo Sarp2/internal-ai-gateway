@@ -4,6 +4,7 @@ import { DynamoDbStack } from '../stacks/dynamodb-stack.ts';
 import { EcsStack } from '../stacks/ecs-stack.ts';
 import { LambdaStack } from '../stacks/lambda-stack.ts';
 import { NetworkStack } from '../stacks/network-stack.ts';
+import { ProviderMockStack } from '../stacks/provider-mock-stack.ts';
 import { ReconciliationStack } from '../stacks/reconciliation-stack.ts';
 import { S3Stack } from '../stacks/s3-stack.ts';
 import { SecretsStack } from '../stacks/secrets-stack.ts';
@@ -12,8 +13,8 @@ import { ServiceDiscoveryStack } from '../stacks/service-discovery-stack.ts';
 const app = new App();
 const anthropicBaseUrl = 'https://api.anthropic.com';
 const openAiBaseUrl = 'https://api.openai.com';
-const integrationAnthropicBaseUrl = 'http://anthropic-provider-mock.integration.internal';
-const integrationOpenAiBaseUrl = 'http://openai-provider-mock.integration.internal';
+const integrationAnthropicBaseUrl = 'http://anthropic-provider-mock.integration.internal:8080';
+const integrationOpenAiBaseUrl = 'http://openai-provider-mock.integration.internal:8080';
 
 const proxyCertificateArn = app.node.tryGetContext('proxyCertificateArn') as string | undefined;
 const proxyDomainName = app.node.tryGetContext('proxyDomainName') as string | undefined;
@@ -62,9 +63,13 @@ new S3Stack(app, 'InternalAiGatewayS3Stack');
 
 if (integrationTestsEnabled) {
 	const integrationNetworkStack = new NetworkStack(app, 'InternalAiGatewayIntegrationNetworkStack');
-	new ServiceDiscoveryStack(app, 'InternalAiGatewayIntegrationServiceDiscoveryStack', {
-		vpc: integrationNetworkStack.vpc,
-	});
+	const integrationServiceDiscoveryStack = new ServiceDiscoveryStack(
+		app,
+		'InternalAiGatewayIntegrationServiceDiscoveryStack',
+		{
+			vpc: integrationNetworkStack.vpc,
+		},
+	);
 	const integrationDynamoDbStack = new DynamoDbStack(
 		app,
 		'InternalAiGatewayIntegrationDynamoDbStack',
@@ -90,7 +95,7 @@ if (integrationTestsEnabled) {
 			secretNamePrefix: 'internal-ai-gateway/integration',
 		},
 	);
-	new EcsStack(app, 'InternalAiGatewayIntegrationEcsStack', {
+	const integrationEcsStack = new EcsStack(app, 'InternalAiGatewayIntegrationEcsStack', {
 		anthropicApiKeySecret: integrationSecretsStack.anthropicApiKeySecret,
 		anthropicBaseUrl: integrationAnthropicBaseUrl,
 		engineersApiKeyIndexName: integrationDynamoDbStack.engineersApiKeyIndexName,
@@ -104,6 +109,12 @@ if (integrationTestsEnabled) {
 		removalPolicy: RemovalPolicy.DESTROY,
 		tokenReconciliationQueue: integrationReconciliationStack.tokenReconciliationQueue,
 		tokenUsageTable: integrationDynamoDbStack.tokenUsageTable,
+		vpc: integrationNetworkStack.vpc,
+	});
+	new ProviderMockStack(app, 'InternalAiGatewayIntegrationProviderMockStack', {
+		cluster: integrationEcsStack.cluster,
+		namespace: integrationServiceDiscoveryStack.namespace,
+		proxySecurityGroup: integrationEcsStack.proxyServiceSecurityGroup,
 		vpc: integrationNetworkStack.vpc,
 	});
 }
