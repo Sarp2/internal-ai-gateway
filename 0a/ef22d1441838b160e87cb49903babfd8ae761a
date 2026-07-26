@@ -1,0 +1,38 @@
+services/provider-mock/Cargo.toml
+  s_c26b496cd2589a::t_44c76f3f59f2e9 9
+  s_c26b496cd2589a::t_53d50fcf7bdae7 8
+services/provider-mock/src/anthropic.rs
+  s_c26b496cd2589a::t_f4a8128023c169 7,22-23,29-88,111-116,119-127,131-134,155-168
+  s_c26b496cd2589a::t_8453a1d7062f88 281
+  s_c26b496cd2589a::t_15ee4279c600d2 1,4,6,8-10,13,135-137,139-154,169-172,175-242,244-246,248-255,259-268,270-271
+  s_c26b496cd2589a::t_53d50fcf7bdae7 2-3,11,256-258,272-280,282-283
+  s_c26b496cd2589a::t_4c44e83d4e1f68 128-130
+  s_c26b496cd2589a::t_44c76f3f59f2e9 5,12,14-21,24-28,89-110,117-118,138,173-174,243,247,269,284
+services/provider-mock/src/main.rs
+  s_c26b496cd2589a::t_44c76f3f59f2e9 7,10-11
+  s_c26b496cd2589a::t_6f76bb2e0c893e 12
+services/provider-mock/src/app.rs
+  s_c26b496cd2589a::t_44c76f3f59f2e9 3,6-7,9-11
+services/provider-mock/src/anthropic_test.rs
+  s_c26b496cd2589a::t_44c76f3f59f2e9 3-49,51-65,67,115,123-125,127-128,205,210-215,230-232,234-235,266
+  s_c26b496cd2589a::t_5b6beabf5f27be 129-204,206-209,216-229
+  s_c26b496cd2589a::t_15ee4279c600d2 1-2,50,66,68-114,116-122,126,233,236-265
+services/provider-mock/Cargo.lock
+  s_c26b496cd2589a::t_aab89dbc129c81 280-281,309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "0aef22d1441838b160e87cb49903babfd8ae761a",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
