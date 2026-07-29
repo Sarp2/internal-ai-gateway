@@ -5,6 +5,8 @@ use axum::http::HeaderMap;
 const DEFAULT_CHUNK_COUNT: usize = 2;
 const MAX_CHUNK_COUNT: usize = 10_000;
 const MAX_CHUNK_DELAY_MS: u64 = 60_000;
+const MAX_STREAM_DURATION_MS: u64 = 60 * 60 * 1_000;
+const STREAM_EVENT_OVERHEAD: u64 = 5;
 const MAX_TOKEN_COUNT: u64 = 1_000_000_000;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,6 +57,14 @@ impl AnthropicMockControl {
             chunk_count,
             "x-mock-stream-error-after-chunks must not exceed x-mock-chunk-count",
         )?;
+        let chunk_delay_ms = parse_bounded_u64(
+            headers,
+            "x-mock-chunk-delay-ms",
+            0,
+            MAX_CHUNK_DELAY_MS,
+            "x-mock-chunk-delay-ms must be a non-negative integer up to 60000",
+        )?;
+        validate_stream_duration(chunk_count, chunk_delay_ms)?;
 
         Ok(Self {
             cache_creation_input_tokens: parse_bounded_u64(
@@ -72,18 +82,25 @@ impl AnthropicMockControl {
                 "x-mock-cache-read-input-tokens must be a non-negative integer up to 1000000000",
             )?,
             chunk_count,
-            chunk_delay: Duration::from_millis(parse_bounded_u64(
-                headers,
-                "x-mock-chunk-delay-ms",
-                0,
-                MAX_CHUNK_DELAY_MS,
-                "x-mock-chunk-delay-ms must be a non-negative integer up to 60000",
-            )?),
+            chunk_delay: Duration::from_millis(chunk_delay_ms),
             http_error: parse_http_error(headers)?,
             response_type: parse_response_type(headers)?,
             stream_error_after_chunks,
         })
     }
+}
+
+fn validate_stream_duration(chunk_count: usize, chunk_delay_ms: u64) -> Result<(), &'static str> {
+    let chunk_count =
+        u64::try_from(chunk_count).expect("bounded mock chunk count should fit into u64");
+    let event_count = chunk_count + STREAM_EVENT_OVERHEAD;
+    let duration_ms = event_count
+        .checked_mul(chunk_delay_ms)
+        .ok_or("mock stream duration must not exceed one hour")?;
+
+    (duration_ms <= MAX_STREAM_DURATION_MS)
+        .then_some(())
+        .ok_or("mock stream duration must not exceed one hour")
 }
 
 fn parse_http_error(headers: &HeaderMap) -> Result<Option<MockHttpError>, &'static str> {

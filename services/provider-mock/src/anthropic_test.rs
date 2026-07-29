@@ -434,6 +434,35 @@ async fn rejects_unbounded_mock_controls() {
 
         assert_invalid_request(response, expected_message).await;
     }
+
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &[
+                ("x-mock-chunk-count", "10000"),
+                ("x-mock-chunk-delay-ms", "60000"),
+            ],
+        ))
+        .await
+        .expect("multi-day mock stream request should complete");
+
+    assert_invalid_request(response, "mock stream duration must not exceed one hour").await;
+}
+
+#[tokio::test]
+async fn accepts_a_mock_stream_with_an_exact_one_hour_duration() {
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &[
+                ("x-mock-chunk-count", "3595"),
+                ("x-mock-chunk-delay-ms", "1000"),
+            ],
+        ))
+        .await
+        .expect("one-hour mock stream request should start");
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
