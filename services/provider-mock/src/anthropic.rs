@@ -26,6 +26,7 @@ const MOCK_TOOL_ID: &str = "toolu_mock_weather_001";
 const MOCK_TOOL_NAME: &str = "get_weather";
 const MOCK_TOOL_INPUT: &str = r#"{"location":"Istanbul"}"#;
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("request-id");
+pub(crate) const MAX_REQUEST_BODY_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Deserialize)]
 pub(crate) struct MessagesRequest {
@@ -135,6 +136,9 @@ pub(crate) async fn messages(
 ) -> Response {
     let Json(request) = match payload {
         Ok(request) => request,
+        Err(rejection) if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE => {
+            return provider_error(MockHttpError::RequestTooLarge);
+        }
         Err(_) => {
             return invalid_request("request body must contain valid Anthropic Messages JSON");
         }

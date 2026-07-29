@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use tokio::time::timeout;
 use tower::ServiceExt;
 
+use crate::anthropic::MAX_REQUEST_BODY_BYTES;
 use crate::app::app;
 
 #[tokio::test]
@@ -511,6 +512,30 @@ async fn rejects_duplicate_known_request_fields() {
     .await;
 }
 
+#[tokio::test]
+async fn accepts_request_body_at_anthropic_messages_limit() {
+    let response = app()
+        .oneshot(raw_messages_request(&messages_body_with_size(
+            MAX_REQUEST_BODY_BYTES,
+        )))
+        .await
+        .expect("maximum-size Anthropic request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn rejects_request_body_above_anthropic_messages_limit() {
+    let response = app()
+        .oneshot(raw_messages_request(&messages_body_with_size(
+            MAX_REQUEST_BODY_BYTES + 1,
+        )))
+        .await
+        .expect("oversized Anthropic request should complete");
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
 fn messages_request(body: Value) -> Request<Body> {
     messages_request_with_headers(body, &[])
 }
@@ -553,6 +578,17 @@ fn valid_messages_body(stream: bool) -> Value {
         ],
         "stream": stream
     })
+}
+
+fn messages_body_with_size(size: usize) -> String {
+    const PREFIX: &str =
+        r#"{"model":"claude-test-model","max_tokens":128,"messages":[{"role":"user","content":""#;
+    const SUFFIX: &str = r#""}]}"#;
+    let content_size = size
+        .checked_sub(PREFIX.len() + SUFFIX.len())
+        .expect("requested body size should fit the valid JSON wrapper");
+
+    format!("{PREFIX}{}{SUFFIX}", "a".repeat(content_size))
 }
 
 async fn assert_invalid_request(response: axum::response::Response, expected_message: &str) {
