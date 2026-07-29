@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use axum::body::{Body, Bytes, to_bytes};
-use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, HeaderName, HeaderValue};
 use axum::http::{Request, StatusCode};
 use serde_json::{Value, json};
+use tokio::time::timeout;
 use tower::ServiceExt;
 
 use crate::app::app;
@@ -24,6 +27,10 @@ async fn returns_a_deterministic_non_streaming_message() {
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
+        response.headers().get("request-id"),
+        Some(&HeaderValue::from_static("req_mock_anthropic_001"))
+    );
+    assert_eq!(
         response_json(response).await,
         json!({
             "id": "msg_mock_anthropic_001",
@@ -39,6 +46,8 @@ async fn returns_a_deterministic_non_streaming_message() {
             "stop_reason": "end_turn",
             "stop_sequence": null,
             "usage": {
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
                 "input_tokens": 12,
                 "output_tokens": 6
             }
@@ -102,6 +111,8 @@ async fn returns_anthropic_compatible_streaming_events() {
                 "stop_reason": null,
                 "stop_sequence": null,
                 "usage": {
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
                     "input_tokens": 12,
                     "output_tokens": 1
                 }
@@ -124,6 +135,304 @@ async fn returns_anthropic_compatible_streaming_events() {
         })
     );
     assert_eq!(events[6].1, json!({ "type": "message_stop" }));
+}
+
+#[tokio::test]
+async fn returns_controlled_provider_http_errors() {
+    let cases = [
+        (
+            "400",
+            StatusCode::BAD_REQUEST,
+            "invalid_request_error",
+            "Mock invalid request error.",
+        ),
+        (
+            "401",
+            StatusCode::UNAUTHORIZED,
+            "authentication_error",
+            "Mock authentication error.",
+        ),
+        (
+            "402",
+            StatusCode::PAYMENT_REQUIRED,
+            "billing_error",
+            "Mock billing error.",
+        ),
+        (
+            "403",
+            StatusCode::FORBIDDEN,
+            "permission_error",
+            "Mock permission error.",
+        ),
+        (
+            "404",
+            StatusCode::NOT_FOUND,
+            "not_found_error",
+            "Mock not found error.",
+        ),
+        (
+            "409",
+            StatusCode::CONFLICT,
+            "conflict_error",
+            "Mock conflict error.",
+        ),
+        (
+            "413",
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "request_too_large",
+            "Mock request too large error.",
+        ),
+        (
+            "429",
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limit_error",
+            "Mock rate limit error.",
+        ),
+        (
+            "500",
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "api_error",
+            "Mock Anthropic API error.",
+        ),
+        (
+            "504",
+            StatusCode::GATEWAY_TIMEOUT,
+            "timeout_error",
+            "Mock Anthropic timeout error.",
+        ),
+        (
+            "529",
+            StatusCode::from_u16(529).expect("529 is a valid HTTP status"),
+            "overloaded_error",
+            "Mock Anthropic overloaded error.",
+        ),
+    ];
+
+    for (header, status, error_type, message) in cases {
+        let response = app()
+            .oneshot(messages_request_with_headers(
+                valid_messages_body(false),
+                &[("x-mock-http-status", header)],
+            ))
+            .await
+            .expect("controlled Anthropic error request should complete");
+
+        assert_eq!(response.status(), status);
+        assert_eq!(
+            response_json(response).await,
+            json!({
+                "type": "error",
+                "error": {
+                    "type": error_type,
+                    "message": message
+                },
+                "request_id": "req_mock_anthropic_001"
+            })
+        );
+    }
+}
+
+#[tokio::test]
+async fn returns_prompt_cache_usage_for_json_and_streaming_responses() {
+    let headers = [
+        ("x-mock-cache-creation-input-tokens", "20"),
+        ("x-mock-cache-read-input-tokens", "30"),
+    ];
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(false),
+            &headers,
+        ))
+        .await
+        .expect("cached Anthropic mock request should complete");
+    let body = response_json(response).await;
+
+    assert_eq!(body["usage"]["cache_creation_input_tokens"], 20);
+    assert_eq!(body["usage"]["cache_read_input_tokens"], 30);
+
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &headers,
+        ))
+        .await
+        .expect("cached streaming Anthropic mock request should complete");
+    let events = sse_events(response_body(response).await);
+
+    assert_eq!(
+        events[0].1["message"]["usage"]["cache_creation_input_tokens"],
+        20
+    );
+    assert_eq!(
+        events[0].1["message"]["usage"]["cache_read_input_tokens"],
+        30
+    );
+}
+
+#[tokio::test]
+async fn creates_long_and_slow_streams_from_bounded_controls() {
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &[("x-mock-chunk-count", "5")],
+        ))
+        .await
+        .expect("long Anthropic mock request should complete");
+    let events = sse_events(response_body(response).await);
+
+    assert_eq!(
+        events
+            .iter()
+            .filter(|(event, _)| event == "content_block_delta")
+            .count(),
+        5
+    );
+    assert_eq!(
+        events.last().map(|(event, _)| event.as_str()),
+        Some("message_stop")
+    );
+
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &[("x-mock-chunk-delay-ms", "25")],
+        ))
+        .await
+        .expect("slow Anthropic mock request should start");
+
+    assert!(
+        timeout(Duration::from_millis(5), response_body(response))
+            .await
+            .is_err(),
+        "delayed stream should not complete before its configured chunk delay"
+    );
+}
+
+#[tokio::test]
+async fn emits_an_error_after_the_configured_stream_chunk() {
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &[
+                ("x-mock-chunk-count", "4"),
+                ("x-mock-stream-error-after-chunks", "2"),
+            ],
+        ))
+        .await
+        .expect("mid-stream Anthropic error request should complete");
+    let events = sse_events(response_body(response).await);
+
+    assert_eq!(
+        events
+            .iter()
+            .map(|(event, _)| event.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "message_start",
+            "content_block_start",
+            "content_block_delta",
+            "content_block_delta",
+            "error"
+        ]
+    );
+    assert_eq!(
+        events.last().map(|(_, data)| data),
+        Some(&json!({
+            "type": "error",
+            "error": {
+                "type": "overloaded_error",
+                "message": "Mock mid-stream overloaded error."
+            }
+        }))
+    );
+}
+
+#[tokio::test]
+async fn returns_anthropic_tool_calls_for_json_and_streaming_responses() {
+    let headers = [("x-mock-response-type", "tool_use")];
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(false),
+            &headers,
+        ))
+        .await
+        .expect("Anthropic tool-use mock request should complete");
+    let body = response_json(response).await;
+
+    assert_eq!(body["stop_reason"], "tool_use");
+    assert_eq!(
+        body["content"][0],
+        json!({
+            "type": "tool_use",
+            "id": "toolu_mock_weather_001",
+            "name": "get_weather",
+            "input": {
+                "location": "Istanbul"
+            }
+        })
+    );
+
+    let response = app()
+        .oneshot(messages_request_with_headers(
+            valid_messages_body(true),
+            &headers,
+        ))
+        .await
+        .expect("streaming Anthropic tool-use mock request should complete");
+    let events = sse_events(response_body(response).await);
+    let partial_json = events
+        .iter()
+        .filter(|(event, _)| event == "content_block_delta")
+        .filter_map(|(_, data)| data["delta"]["partial_json"].as_str())
+        .collect::<String>();
+
+    assert_eq!(
+        events[1].1["content_block"],
+        json!({
+            "type": "tool_use",
+            "id": "toolu_mock_weather_001",
+            "name": "get_weather",
+            "input": {}
+        })
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&partial_json).expect("tool input should be valid JSON"),
+        json!({ "location": "Istanbul" })
+    );
+    assert_eq!(events[5].1["delta"]["stop_reason"], "tool_use");
+}
+
+#[tokio::test]
+async fn rejects_unbounded_mock_controls() {
+    let cases = [
+        (
+            "x-mock-chunk-count",
+            "10001",
+            "x-mock-chunk-count must be an integer between 1 and 10000",
+        ),
+        (
+            "x-mock-chunk-delay-ms",
+            "60001",
+            "x-mock-chunk-delay-ms must be a non-negative integer up to 60000",
+        ),
+        (
+            "x-mock-stream-error-after-chunks",
+            "3",
+            "x-mock-stream-error-after-chunks must not exceed x-mock-chunk-count",
+        ),
+    ];
+
+    for (name, value, expected_message) in cases {
+        let response = app()
+            .oneshot(messages_request_with_headers(
+                valid_messages_body(true),
+                &[(name, value)],
+            ))
+            .await
+            .expect("invalid mock control request should complete");
+
+        assert_invalid_request(response, expected_message).await;
+    }
 }
 
 #[tokio::test]
@@ -203,7 +512,24 @@ async fn rejects_duplicate_known_request_fields() {
 }
 
 fn messages_request(body: Value) -> Request<Body> {
-    raw_messages_request(&body.to_string())
+    messages_request_with_headers(body, &[])
+}
+
+fn messages_request_with_headers(body: Value, headers: &[(&str, &str)]) -> Request<Body> {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/v1/messages")
+        .header("content-type", "application/json");
+    for (name, value) in headers {
+        request = request.header(
+            HeaderName::from_bytes(name.as_bytes()).expect("mock header name should be valid"),
+            HeaderValue::from_str(value).expect("mock header value should be valid"),
+        );
+    }
+
+    request
+        .body(Body::from(body.to_string()))
+        .expect("Anthropic request should be valid")
 }
 
 fn raw_messages_request(body: &str) -> Request<Body> {
@@ -215,6 +541,20 @@ fn raw_messages_request(body: &str) -> Request<Body> {
         .expect("Anthropic request should be valid")
 }
 
+fn valid_messages_body(stream: bool) -> Value {
+    json!({
+        "model": "claude-test-model",
+        "max_tokens": 128,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Hello"
+            }
+        ],
+        "stream": stream
+    })
+}
+
 async fn assert_invalid_request(response: axum::response::Response, expected_message: &str) {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
@@ -224,7 +564,8 @@ async fn assert_invalid_request(response: axum::response::Response, expected_mes
             "error": {
                 "type": "invalid_request_error",
                 "message": expected_message
-            }
+            },
+            "request_id": "req_mock_anthropic_001"
         })
     );
 }
