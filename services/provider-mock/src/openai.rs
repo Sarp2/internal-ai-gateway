@@ -196,11 +196,12 @@ fn streaming_events(model: &str, include_usage: bool, control: &OpenAiMockContro
         model,
         json!({ "role": "assistant", "content": "" }),
         None,
+        include_usage,
     ))];
 
     let ended_with_error = match control.common.response_type {
-        MockResponseType::Text => append_text_events(&mut events, model, control),
-        MockResponseType::ToolUse => append_tool_events(&mut events, model, control),
+        MockResponseType::Text => append_text_events(&mut events, model, include_usage, control),
+        MockResponseType::ToolUse => append_tool_events(&mut events, model, include_usage, control),
     };
 
     if ended_with_error {
@@ -221,7 +222,12 @@ fn streaming_events(model: &str, include_usage: bool, control: &OpenAiMockContro
     events
 }
 
-fn append_text_events(events: &mut Vec<Bytes>, model: &str, control: &OpenAiMockControl) -> bool {
+fn append_text_events(
+    events: &mut Vec<Bytes>,
+    model: &str,
+    include_usage: bool,
+    control: &OpenAiMockControl,
+) -> bool {
     for (index, content) in split_text(MOCK_RESPONSE_TEXT, control.common.chunk_count)
         .into_iter()
         .enumerate()
@@ -233,17 +239,28 @@ fn append_text_events(events: &mut Vec<Bytes>, model: &str, control: &OpenAiMock
             model,
             json!({ "content": content }),
             None,
+            include_usage,
         )));
     }
     if append_stream_error_if_requested(events, control, control.common.chunk_count) {
         return true;
     }
-    events.push(data_event(chunk(model, json!({}), Some("stop"))));
+    events.push(data_event(chunk(
+        model,
+        json!({}),
+        Some("stop"),
+        include_usage,
+    )));
 
     false
 }
 
-fn append_tool_events(events: &mut Vec<Bytes>, model: &str, control: &OpenAiMockControl) -> bool {
+fn append_tool_events(
+    events: &mut Vec<Bytes>,
+    model: &str,
+    include_usage: bool,
+    control: &OpenAiMockControl,
+) -> bool {
     events[0] = data_event(chunk(
         model,
         json!({
@@ -260,6 +277,7 @@ fn append_tool_events(events: &mut Vec<Bytes>, model: &str, control: &OpenAiMock
             }]
         }),
         None,
+        include_usage,
     ));
     for (index, arguments) in split_text(MOCK_TOOL_ARGUMENTS, control.common.chunk_count)
         .into_iter()
@@ -279,12 +297,18 @@ fn append_tool_events(events: &mut Vec<Bytes>, model: &str, control: &OpenAiMock
                 }]
             }),
             None,
+            include_usage,
         )));
     }
     if append_stream_error_if_requested(events, control, control.common.chunk_count) {
         return true;
     }
-    events.push(data_event(chunk(model, json!({}), Some("tool_calls"))));
+    events.push(data_event(chunk(
+        model,
+        json!({}),
+        Some("tool_calls"),
+        include_usage,
+    )));
 
     false
 }
@@ -309,8 +333,8 @@ fn append_stream_error_if_requested(
     true
 }
 
-fn chunk(model: &str, delta: Value, finish_reason: Option<&str>) -> Value {
-    json!({
+fn chunk(model: &str, delta: Value, finish_reason: Option<&str>, include_usage: bool) -> Value {
+    let mut chunk = json!({
         "id": MOCK_COMPLETION_ID,
         "object": "chat.completion.chunk",
         "created": MOCK_CREATED_AT,
@@ -320,9 +344,16 @@ fn chunk(model: &str, delta: Value, finish_reason: Option<&str>) -> Value {
             "delta": delta,
             "logprobs": null,
             "finish_reason": finish_reason
-        }],
-        "usage": null
-    })
+        }]
+    });
+    if include_usage {
+        chunk
+            .as_object_mut()
+            .expect("mock chunk should be a JSON object")
+            .insert("usage".to_string(), Value::Null);
+    }
+
+    chunk
 }
 
 fn usage(control: &OpenAiMockControl) -> Value {
