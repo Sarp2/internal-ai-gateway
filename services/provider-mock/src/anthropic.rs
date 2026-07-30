@@ -1,21 +1,15 @@
-use std::convert::Infallible;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
-
 use axum::Json;
 use axum::body::{Body, Bytes};
 use axum::extract::rejection::JsonRejection;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tokio::time::{Sleep, sleep};
 
-use crate::anthropic_control::{AnthropicMockControl, MockHttpError, MockResponseType};
+use crate::anthropic_control::{AnthropicMockControl, MockHttpError};
+use crate::mock_control::MockResponseType;
+use crate::mock_stream::{DelayedByteStream, split_text};
 
 const MOCK_MESSAGE_ID: &str = "msg_mock_anthropic_001";
 const MOCK_REQUEST_ID: &str = "req_mock_anthropic_001";
@@ -157,7 +151,7 @@ pub(crate) async fn messages(
         return streaming_response(request.model, control);
     }
 
-    let (content, stop_reason) = match control.response_type {
+    let (content, stop_reason) = match control.common.response_type {
         MockResponseType::Text => (
             vec![json!({
                 "type": "text",
@@ -290,11 +284,7 @@ fn with_request_id(mut response: Response) -> Response {
 
 fn streaming_response(model: String, control: AnthropicMockControl) -> Response {
     let events = streaming_events(&model, &control);
-    let body = Body::from_stream(AnthropicEventStream {
-        delay: control.chunk_delay,
-        events: events.into_iter(),
-        sleep: None,
-    });
+    let body = Body::from_stream(DelayedByteStream::new(events, control.common.chunk_delay));
     let mut response = Response::new(body);
     response
         .headers_mut()
@@ -329,7 +319,7 @@ fn streaming_events(model: &str, control: &AnthropicMockControl) -> Vec<Bytes> {
         }),
     )];
 
-    match control.response_type {
+    match control.common.response_type {
         MockResponseType::Text => append_text_events(&mut events, control),
         MockResponseType::ToolUse => append_tool_events(&mut events, control),
     }
@@ -350,7 +340,7 @@ fn append_text_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
         }),
     ));
 
-    for (index, text) in split_text(MOCK_RESPONSE_TEXT, control.chunk_count)
+    for (index, text) in split_text(MOCK_RESPONSE_TEXT, control.common.chunk_count)
         .into_iter()
         .enumerate()
     {
@@ -369,7 +359,7 @@ fn append_text_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
             }),
         ));
     }
-    if append_stream_error_if_requested(events, control, control.chunk_count) {
+    if append_stream_error_if_requested(events, control, control.common.chunk_count) {
         return;
     }
     append_stream_completion(events, "end_turn");
@@ -390,7 +380,7 @@ fn append_tool_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
         }),
     ));
 
-    for (index, partial_json) in split_tool_input(control.chunk_count)
+    for (index, partial_json) in split_tool_input(control.common.chunk_count)
         .into_iter()
         .enumerate()
     {
@@ -409,7 +399,7 @@ fn append_tool_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
             }),
         ));
     }
-    if append_stream_error_if_requested(events, control, control.chunk_count) {
+    if append_stream_error_if_requested(events, control, control.common.chunk_count) {
         return;
     }
     append_stream_completion(events, "tool_use");
@@ -420,7 +410,7 @@ fn append_stream_error_if_requested(
     control: &AnthropicMockControl,
     completed_chunks: usize,
 ) -> bool {
-    if control.stream_error_after_chunks != Some(completed_chunks) {
+    if control.common.stream_error_after_chunks != Some(completed_chunks) {
         return false;
     }
     events.push(sse_event(
@@ -468,22 +458,6 @@ fn append_stream_completion(events: &mut Vec<Bytes>, stop_reason: &str) {
     ]);
 }
 
-fn split_text(text: &str, chunk_count: usize) -> Vec<String> {
-    let characters = text.chars().collect::<Vec<_>>();
-    let base_chunk_size = characters.len() / chunk_count;
-    let larger_chunk_count = characters.len() % chunk_count;
-    let mut offset = 0;
-
-    (0..chunk_count)
-        .map(|index| {
-            let chunk_size = base_chunk_size + usize::from(index < larger_chunk_count);
-            let chunk = characters[offset..offset + chunk_size].iter().collect();
-            offset += chunk_size;
-            chunk
-        })
-        .collect()
-}
-
 fn split_tool_input(chunk_count: usize) -> Vec<&'static str> {
     let chunk_size = MOCK_TOOL_INPUT.len().div_ceil(chunk_count);
     let mut chunks = MOCK_TOOL_INPUT
@@ -498,37 +472,4 @@ fn split_tool_input(chunk_count: usize) -> Vec<&'static str> {
 
 fn sse_event(event: &str, data: Value) -> Bytes {
     Bytes::from(format!("event: {event}\ndata: {data}\n\n"))
-}
-
-struct AnthropicEventStream {
-    delay: Duration,
-    events: std::vec::IntoIter<Bytes>,
-    sleep: Option<Pin<Box<Sleep>>>,
-}
-
-impl Stream for AnthropicEventStream {
-    type Item = Result<Bytes, Infallible>;
-
-    fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.events.len() == 0 {
-            return Poll::Ready(None);
-        }
-        if self.delay.is_zero() {
-            return Poll::Ready(self.events.next().map(Ok));
-        }
-
-        if self.sleep.is_none() {
-            self.sleep = Some(Box::pin(sleep(self.delay)));
-        }
-        let sleep = self
-            .sleep
-            .as_mut()
-            .expect("stream delay should exist before polling");
-        if sleep.as_mut().poll(context).is_pending() {
-            return Poll::Pending;
-        }
-        self.sleep = None;
-
-        Poll::Ready(self.events.next().map(Ok))
-    }
 }
