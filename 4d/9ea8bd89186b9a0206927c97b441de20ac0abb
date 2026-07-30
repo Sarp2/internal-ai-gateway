@@ -1,0 +1,54 @@
+services/provider-mock/src/openai_control.rs
+  s_c26b496cd2589a::t_25ddcb61064249 1-84
+services/provider-mock/src/anthropic.rs
+  s_c26b496cd2589a::t_de2eb84c80a3fc 10-12,154,287,322,343,362,383,402,413
+services/provider-mock/src/main.rs
+  s_c26b496cd2589a::t_7dfd90d7ebc523 12-13,21-22
+  s_c26b496cd2589a::t_de2eb84c80a3fc 10-11
+  s_c26b496cd2589a::t_73151359f53e6f 23
+services/provider-mock/src/openai.rs
+  s_c26b496cd2589a::t_0082e6ee7c52ba 313
+  s_c26b496cd2589a::t_072716e828751b 180,182,194
+  s_c26b496cd2589a::t_a1b6553af0d0b9 123-124
+  s_c26b496cd2589a::t_25ddcb61064249 1-122,125-179,181,183-193,195-200,205,207-223,225-229,231-238,240,244-245,247-268,270-284,286,290-311,314-322,326-452
+  s_c26b496cd2589a::t_f960b2f2e7630e 201,204,206,230,239,242-243,269,285,288-289
+  s_c26b496cd2589a::t_d8baef3f2e229b 202-203
+  s_c26b496cd2589a::t_75e91be7cb278a 224
+  s_c26b496cd2589a::t_d1efb33039634a 241
+  s_c26b496cd2589a::t_500743c93fff88 246
+  s_c26b496cd2589a::t_219e9b8ef3ded1 287
+  s_c26b496cd2589a::t_8a39aface51347 312
+  s_c26b496cd2589a::t_684b606c236293 323-325
+services/provider-mock/src/anthropic_control.rs
+  s_c26b496cd2589a::t_dd1d7d163a5d43 5-6,26,47
+  s_c26b496cd2589a::t_3ffa87af4e9a73 3
+services/provider-mock/src/mock_stream.rs
+  s_c26b496cd2589a::t_dd1d7d163a5d43 1-68
+services/provider-mock/src/openai_test.rs
+  s_c26b496cd2589a::t_913470cd6537ae 90-92
+  s_c26b496cd2589a::t_bd25d01b516012 255-258,280-283
+  s_c26b496cd2589a::t_ef8b3b7f2a5d2d 1-89,93-254,259-279,284-363,385-403,413-414,416-431,433-499
+  s_c26b496cd2589a::t_072716e828751b 415,432
+  s_c26b496cd2589a::t_138282eb4b1f54 364-384,404-412
+services/provider-mock/src/app.rs
+  s_c26b496cd2589a::t_7dfd90d7ebc523 11-20
+  s_c26b496cd2589a::t_072716e828751b 7-8
+services/provider-mock/src/mock_control.rs
+  s_c26b496cd2589a::t_dd1d7d163a5d43 1-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "4d9ea8bd89186b9a0206927c97b441de20ac0abb",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
