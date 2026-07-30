@@ -350,7 +350,10 @@ fn append_text_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
         }),
     ));
 
-    for index in 0..control.chunk_count {
+    for (index, text) in split_text(MOCK_RESPONSE_TEXT, control.chunk_count)
+        .into_iter()
+        .enumerate()
+    {
         if append_stream_error_if_requested(events, control, index) {
             return;
         }
@@ -361,7 +364,7 @@ fn append_text_events(events: &mut Vec<Bytes>, control: &AnthropicMockControl) {
                 "index": 0,
                 "delta": {
                     "type": "text_delta",
-                    "text": mock_text_chunk(index, control.chunk_count)
+                    "text": text
                 }
             }),
         ));
@@ -465,12 +468,20 @@ fn append_stream_completion(events: &mut Vec<Bytes>, stop_reason: &str) {
     ]);
 }
 
-fn mock_text_chunk(index: usize, chunk_count: usize) -> String {
-    if chunk_count == 2 {
-        return ["Mock Anthropic ", "response."][index].to_string();
-    }
+fn split_text(text: &str, chunk_count: usize) -> Vec<String> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let base_chunk_size = characters.len() / chunk_count;
+    let larger_chunk_count = characters.len() % chunk_count;
+    let mut offset = 0;
 
-    format!("mock-chunk-{} ", index + 1)
+    (0..chunk_count)
+        .map(|index| {
+            let chunk_size = base_chunk_size + usize::from(index < larger_chunk_count);
+            let chunk = characters[offset..offset + chunk_size].iter().collect();
+            offset += chunk_size;
+            chunk
+        })
+        .collect()
 }
 
 fn split_tool_input(chunk_count: usize) -> Vec<&'static str> {

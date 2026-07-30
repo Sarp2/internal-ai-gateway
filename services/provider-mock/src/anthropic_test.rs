@@ -120,8 +120,7 @@ async fn returns_anthropic_compatible_streaming_events() {
             }
         })
     );
-    assert_eq!(events[2].1["delta"]["text"], "Mock Anthropic ");
-    assert_eq!(events[3].1["delta"]["text"], "response.");
+    assert_eq!(streamed_text(&events), "Mock Anthropic response.");
     assert_eq!(
         events[5].1,
         json!({
@@ -136,6 +135,30 @@ async fn returns_anthropic_compatible_streaming_events() {
         })
     );
     assert_eq!(events[6].1, json!({ "type": "message_stop" }));
+}
+
+#[tokio::test]
+async fn preserves_text_response_across_configured_chunk_counts() {
+    for chunk_count in [1, 2, 4, 25] {
+        let chunk_count_header = chunk_count.to_string();
+        let response = app()
+            .oneshot(messages_request_with_headers(
+                valid_messages_body(true),
+                &[("x-mock-chunk-count", &chunk_count_header)],
+            ))
+            .await
+            .expect("configured Anthropic text stream should complete");
+        let events = sse_events(response_body(response).await);
+
+        assert_eq!(
+            events
+                .iter()
+                .filter(|(event, _)| event == "content_block_delta")
+                .count(),
+            chunk_count
+        );
+        assert_eq!(streamed_text(&events), "Mock Anthropic response.");
+    }
 }
 
 #[tokio::test]
@@ -668,5 +691,13 @@ fn sse_events(body: Bytes) -> Vec<(String, Value)> {
                 serde_json::from_str(data).expect("SSE data should contain valid JSON"),
             )
         })
+        .collect()
+}
+
+fn streamed_text(events: &[(String, Value)]) -> String {
+    events
+        .iter()
+        .filter(|(event, _)| event == "content_block_delta")
+        .filter_map(|(_, data)| data["delta"]["text"].as_str())
         .collect()
 }
