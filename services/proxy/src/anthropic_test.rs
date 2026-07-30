@@ -75,6 +75,10 @@ fn forwards_provider_request_headers() {
         &test_header("content-type"),
         &connection_headers
     ));
+    assert!(should_forward_request_header(
+        &test_header("x-mock-chunk-count"),
+        &connection_headers
+    ));
 }
 
 #[test]

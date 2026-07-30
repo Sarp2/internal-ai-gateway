@@ -4,7 +4,12 @@ use tokio::net::TcpListener;
 
 use crate::app::app;
 
+mod anthropic;
+mod anthropic_control;
 mod app;
+
+#[cfg(test)]
+mod anthropic_test;
 
 #[cfg(test)]
 mod app_test;
