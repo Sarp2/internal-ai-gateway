@@ -62,7 +62,7 @@ impl ChatCompletionsRequest {
 
 #[derive(Deserialize)]
 struct ChatMessage {
-    content: Option<Value>,
+    content: Option<MessageContent>,
     role: String,
     #[serde(default)]
     tool_calls: Option<Vec<Value>>,
@@ -78,14 +78,105 @@ impl ChatMessage {
         }
 
         match self.content.as_ref() {
-            Some(Value::String(content)) => !content.is_empty(),
-            Some(Value::Array(content)) => !content.is_empty(),
-            Some(Value::Null) | None => {
+            Some(MessageContent::Text(content)) => !content.trim().is_empty(),
+            Some(MessageContent::Parts(content)) => {
+                !content.is_empty()
+                    && content
+                        .iter()
+                        .all(|part| part.is_valid_for_role(&self.role))
+            }
+            None => {
                 self.role == "assistant"
                     && self
                         .tool_calls
                         .as_ref()
                         .is_some_and(|tool_calls| !tool_calls.is_empty())
+            }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum MessageContent {
+    Text(String),
+    Parts(Vec<ContentPart>),
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ContentPart {
+    Text { text: String },
+    ImageUrl { image_url: ImageUrlContent },
+    InputAudio { input_audio: InputAudioContent },
+    File { file: FileContent },
+    Refusal { refusal: String },
+}
+
+impl ContentPart {
+    fn is_valid_for_role(&self, role: &str) -> bool {
+        match self {
+            Self::Text { text } => {
+                matches!(role, "developer" | "system" | "user" | "assistant" | "tool")
+                    && !text.trim().is_empty()
+            }
+            Self::ImageUrl { image_url } => role == "user" && image_url.is_valid(),
+            Self::InputAudio { input_audio } => role == "user" && input_audio.is_valid(),
+            Self::File { file } => role == "user" && file.is_valid(),
+            Self::Refusal { refusal } => role == "assistant" && !refusal.trim().is_empty(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct ImageUrlContent {
+    #[serde(default)]
+    detail: Option<String>,
+    url: String,
+}
+
+impl ImageUrlContent {
+    fn is_valid(&self) -> bool {
+        !self.url.trim().is_empty()
+            && self
+                .detail
+                .as_deref()
+                .is_none_or(|detail| matches!(detail, "auto" | "low" | "high"))
+    }
+}
+
+#[derive(Deserialize)]
+struct InputAudioContent {
+    data: String,
+    format: String,
+}
+
+impl InputAudioContent {
+    fn is_valid(&self) -> bool {
+        !self.data.is_empty() && matches!(self.format.as_str(), "wav" | "mp3")
+    }
+}
+
+#[derive(Deserialize)]
+struct FileContent {
+    #[serde(default)]
+    file_data: Option<String>,
+    #[serde(default)]
+    file_id: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+}
+
+impl FileContent {
+    fn is_valid(&self) -> bool {
+        match (self.file_id.as_deref(), self.file_data.as_deref()) {
+            (Some(file_id), None) => !file_id.trim().is_empty(),
+            (None, Some(file_data)) => {
+                !file_data.is_empty()
+                    && self
+                        .filename
+                        .as_deref()
+                        .is_some_and(|filename| !filename.trim().is_empty())
             }
             _ => false,
         }

@@ -362,6 +362,155 @@ async fn rejects_invalid_openai_requests_and_controls() {
 }
 
 #[tokio::test]
+async fn accepts_valid_openai_multipart_content() {
+    let requests = [
+        json!({
+            "model": "gpt-test-model",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Describe these inputs."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://example.com/image.png",
+                            "detail": "high"
+                        }
+                    },
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": "bW9jay1hdWRpbw==",
+                            "format": "wav"
+                        }
+                    },
+                    {
+                        "type": "file",
+                        "file": {
+                            "file_id": "file_mock_001"
+                        }
+                    },
+                    {
+                        "type": "file",
+                        "file": {
+                            "file_data": "bW9jay1maWxl",
+                            "filename": "notes.txt"
+                        }
+                    }
+                ]
+            }]
+        }),
+        json!({
+            "model": "gpt-test-model",
+            "messages": [{
+                "role": "assistant",
+                "content": [{
+                    "type": "refusal",
+                    "refusal": "Mock refusal."
+                }]
+            }]
+        }),
+    ];
+
+    for request in requests {
+        let response = app()
+            .oneshot(chat_completions_request(request))
+            .await
+            .expect("valid multipart OpenAI request should complete");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn rejects_malformed_openai_multipart_content() {
+    let malformed_shapes = [
+        json!([123]),
+        json!([{}]),
+        json!([{
+            "type": "unknown",
+            "value": "invalid"
+        }]),
+        json!([{
+            "type": "text"
+        }]),
+        json!([{
+            "type": "image_url",
+            "image_url": {}
+        }]),
+    ];
+
+    for content in malformed_shapes {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [{
+                    "role": "user",
+                    "content": content
+                }]
+            })))
+            .await
+            .expect("malformed multipart OpenAI request should complete");
+
+        assert_openai_invalid_request(
+            response,
+            "request body must contain valid Chat Completions JSON",
+        )
+        .await;
+    }
+
+    let invalid_values = [
+        json!([{
+            "type": "text",
+            "text": ""
+        }]),
+        json!([{
+            "type": "image_url",
+            "image_url": {
+                "url": "",
+                "detail": "high"
+            }
+        }]),
+        json!([{
+            "type": "input_audio",
+            "input_audio": {
+                "data": "bW9jay1hdWRpbw==",
+                "format": "flac"
+            }
+        }]),
+        json!([{
+            "type": "file",
+            "file": {
+                "file_data": "bW9jay1maWxl"
+            }
+        }]),
+        json!([{
+            "type": "refusal",
+            "refusal": "Not valid for a user message."
+        }]),
+    ];
+
+    for content in invalid_values {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [{
+                    "role": "user",
+                    "content": content
+                }]
+            })))
+            .await
+            .expect("invalid multipart OpenAI request should complete");
+
+        assert_openai_invalid_request(response, "each message must have a valid role and content")
+            .await;
+    }
+}
+
+#[tokio::test]
 async fn rejects_duplicate_openai_control_fields() {
     let response = app()
         .oneshot(raw_chat_completions_request(
