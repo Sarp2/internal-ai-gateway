@@ -1,0 +1,26 @@
+services/provider-mock/src/openai_test.rs
+  s_c26b496cd2589a::t_1fc1bcca74b46c 484-490,497-503
+services/provider-mock/src/openai.rs
+  s_c26b496cd2589a::t_1fc1bcca74b46c 7-8,186,205,216-217
+  s_c26b496cd2589a::t_5d722e18190882 218-219
+services/provider-mock/Cargo.toml
+  s_c26b496cd2589a::t_1fc1bcca74b46c 8
+services/provider-mock/Cargo.lock
+  s_c26b496cd2589a::t_fbb1728d553f0b 63-68,286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "c342456fd7a9e73c0c857ea2e1c4d4ddc3754d15",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
