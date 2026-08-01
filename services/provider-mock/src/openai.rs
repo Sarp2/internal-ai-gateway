@@ -69,6 +69,8 @@ struct ChatMessage {
     content: Option<MessageContent>,
     role: String,
     #[serde(default)]
+    tool_call_id: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<ToolCall>>,
 }
 
@@ -78,6 +80,17 @@ impl ChatMessage {
             self.role.as_str(),
             "developer" | "system" | "user" | "assistant" | "tool"
         ) {
+            return false;
+        }
+
+        let tool_call_id_is_valid = match self.role.as_str() {
+            "tool" => self
+                .tool_call_id
+                .as_deref()
+                .is_some_and(|tool_call_id| !tool_call_id.trim().is_empty()),
+            _ => self.tool_call_id.is_none(),
+        };
+        if !tool_call_id_is_valid {
             return false;
         }
 

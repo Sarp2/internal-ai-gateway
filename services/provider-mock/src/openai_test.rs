@@ -678,6 +678,53 @@ async fn rejects_malformed_assistant_tool_call_messages() {
 }
 
 #[tokio::test]
+async fn validates_tool_result_message_call_ids() {
+    let response = app()
+        .oneshot(chat_completions_request(json!({
+            "model": "gpt-test-model",
+            "messages": [{
+                "role": "tool",
+                "tool_call_id": "call_123",
+                "content": "{\"temperature\":24}"
+            }]
+        })))
+        .await
+        .expect("valid tool-result request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let invalid_messages = [
+        json!({
+            "role": "tool",
+            "content": "{\"temperature\":24}"
+        }),
+        json!({
+            "role": "tool",
+            "tool_call_id": "   ",
+            "content": "{\"temperature\":24}"
+        }),
+        json!({
+            "role": "user",
+            "tool_call_id": "call_123",
+            "content": "Hello"
+        }),
+    ];
+
+    for message in invalid_messages {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [message]
+            })))
+            .await
+            .expect("invalid tool-result request should complete");
+
+        assert_openai_invalid_request(response, "each message must have a valid role and content")
+            .await;
+    }
+}
+
+#[tokio::test]
 async fn rejects_duplicate_openai_control_fields() {
     let response = app()
         .oneshot(raw_chat_completions_request(
