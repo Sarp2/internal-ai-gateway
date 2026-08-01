@@ -7,12 +7,19 @@ use crate::app::app;
 mod anthropic;
 mod anthropic_control;
 mod app;
+mod mock_control;
+mod mock_stream;
+mod openai;
+mod openai_control;
 
 #[cfg(test)]
 mod anthropic_test;
 
 #[cfg(test)]
 mod app_test;
+
+#[cfg(test)]
+mod openai_test;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
