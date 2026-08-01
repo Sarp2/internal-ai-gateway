@@ -1,0 +1,21 @@
+services/provider-mock/src/openai_test.rs
+  s_c26b496cd2589a::t_c7dfdc393ea693 638-677
+services/provider-mock/src/openai.rs
+  s_c26b496cd2589a::t_c7dfdc393ea693 1-2,10,84-95,104,226-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "c5a7201904c17719bd79aaaee16700ef9283dd0a",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
