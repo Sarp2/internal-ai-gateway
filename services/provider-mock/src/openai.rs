@@ -1,11 +1,13 @@
+use std::io;
+
 use axum::Json;
 use axum::body::{Body, Bytes};
 use axum::extract::rejection::JsonRejection;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::read::DecoderReader;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -79,6 +81,18 @@ impl ChatMessage {
             return false;
         }
 
+        let tool_calls_are_valid = match self.tool_calls.as_ref() {
+            None => true,
+            Some(tool_calls) => {
+                self.role == "assistant"
+                    && !tool_calls.is_empty()
+                    && tool_calls.iter().all(ToolCall::is_valid)
+            }
+        };
+        if !tool_calls_are_valid {
+            return false;
+        }
+
         match self.content.as_ref() {
             Some(MessageContent::Text(content)) => !content.trim().is_empty(),
             Some(MessageContent::Parts(content)) => {
@@ -87,12 +101,7 @@ impl ChatMessage {
                         .iter()
                         .all(|part| part.is_valid_for_role(&self.role))
             }
-            None => {
-                self.role == "assistant"
-                    && self.tool_calls.as_ref().is_some_and(|tool_calls| {
-                        !tool_calls.is_empty() && tool_calls.iter().all(ToolCall::is_valid)
-                    })
-            }
+            None => self.role == "assistant" && self.tool_calls.is_some(),
         }
     }
 }
@@ -214,7 +223,12 @@ impl FileContent {
 }
 
 fn is_valid_base64(value: &str) -> bool {
-    !value.is_empty() && BASE64_STANDARD.decode(value).is_ok()
+    if value.is_empty() {
+        return false;
+    }
+
+    let mut decoder = DecoderReader::new(value.as_bytes(), &BASE64_STANDARD);
+    io::copy(&mut decoder, &mut io::sink()).is_ok()
 }
 
 #[derive(Deserialize)]

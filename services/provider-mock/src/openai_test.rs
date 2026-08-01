@@ -635,6 +635,46 @@ async fn rejects_malformed_assistant_tool_call_messages() {
         assert_openai_invalid_request(response, "each message must have a valid role and content")
             .await;
     }
+
+    let messages_with_invalid_tool_calls = [
+        json!({
+            "role": "assistant",
+            "content": "Calling a tool.",
+            "tool_calls": [{
+                "id": "",
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "arguments": "{}"
+                }
+            }]
+        }),
+        json!({
+            "role": "user",
+            "content": "User messages cannot contain tool calls.",
+            "tool_calls": [{
+                "id": "call_123",
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "arguments": "{}"
+                }
+            }]
+        }),
+    ];
+
+    for message in messages_with_invalid_tool_calls {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [message]
+            })))
+            .await
+            .expect("invalid tool-call role or content request should complete");
+
+        assert_openai_invalid_request(response, "each message must have a valid role and content")
+            .await;
+    }
 }
 
 #[tokio::test]
