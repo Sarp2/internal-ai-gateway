@@ -511,6 +511,119 @@ async fn rejects_malformed_openai_multipart_content() {
 }
 
 #[tokio::test]
+async fn accepts_valid_assistant_tool_call_messages() {
+    let response = app()
+        .oneshot(chat_completions_request(json!({
+            "model": "gpt-test-model",
+            "messages": [{
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [{
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": "{\"location\":\"Istanbul\"}"
+                    }
+                }]
+            }]
+        })))
+        .await
+        .expect("valid assistant tool-call request should complete");
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn rejects_malformed_assistant_tool_call_messages() {
+    let malformed_tool_calls = [
+        json!([123]),
+        json!([{}]),
+        json!([{
+            "id": "call_123",
+            "type": "custom",
+            "function": {
+                "name": "get_weather",
+                "arguments": "{}"
+            }
+        }]),
+        json!([{
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "arguments": 123
+            }
+        }]),
+    ];
+
+    for tool_calls in malformed_tool_calls {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [{
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": tool_calls
+                }]
+            })))
+            .await
+            .expect("malformed assistant tool-call request should complete");
+
+        assert_openai_invalid_request(
+            response,
+            "request body must contain valid Chat Completions JSON",
+        )
+        .await;
+    }
+
+    let invalid_tool_calls = [
+        json!([]),
+        json!([{
+            "id": "",
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "arguments": "{}"
+            }
+        }]),
+        json!([{
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "",
+                "arguments": "{}"
+            }
+        }]),
+        json!([{
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "arguments": ""
+            }
+        }]),
+    ];
+
+    for tool_calls in invalid_tool_calls {
+        let response = app()
+            .oneshot(chat_completions_request(json!({
+                "model": "gpt-test-model",
+                "messages": [{
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": tool_calls
+                }]
+            })))
+            .await
+            .expect("invalid assistant tool-call request should complete");
+
+        assert_openai_invalid_request(response, "each message must have a valid role and content")
+            .await;
+    }
+}
+
+#[tokio::test]
 async fn rejects_duplicate_openai_control_fields() {
     let response = app()
         .oneshot(raw_chat_completions_request(

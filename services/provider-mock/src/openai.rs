@@ -65,7 +65,7 @@ struct ChatMessage {
     content: Option<MessageContent>,
     role: String,
     #[serde(default)]
-    tool_calls: Option<Vec<Value>>,
+    tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl ChatMessage {
@@ -87,13 +87,41 @@ impl ChatMessage {
             }
             None => {
                 self.role == "assistant"
-                    && self
-                        .tool_calls
-                        .as_ref()
-                        .is_some_and(|tool_calls| !tool_calls.is_empty())
+                    && self.tool_calls.as_ref().is_some_and(|tool_calls| {
+                        !tool_calls.is_empty() && tool_calls.iter().all(ToolCall::is_valid)
+                    })
             }
         }
     }
+}
+
+#[derive(Deserialize)]
+struct ToolCall {
+    function: ToolCallFunction,
+    id: String,
+    #[serde(rename = "type")]
+    call_type: ToolCallType,
+}
+
+impl ToolCall {
+    fn is_valid(&self) -> bool {
+        !self.id.trim().is_empty()
+            && matches!(self.call_type, ToolCallType::Function)
+            && !self.function.name.trim().is_empty()
+            && !self.function.arguments.trim().is_empty()
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ToolCallType {
+    Function,
+}
+
+#[derive(Deserialize)]
+struct ToolCallFunction {
+    arguments: String,
+    name: String,
 }
 
 #[derive(Deserialize)]
