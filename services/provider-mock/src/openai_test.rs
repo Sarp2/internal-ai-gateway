@@ -482,9 +482,23 @@ async fn rejects_malformed_openai_multipart_content() {
             }
         }]),
         json!([{
+            "type": "input_audio",
+            "input_audio": {
+                "data": "not-valid-base64!",
+                "format": "wav"
+            }
+        }]),
+        json!([{
             "type": "file",
             "file": {
                 "file_data": "bW9jay1maWxl"
+            }
+        }]),
+        json!([{
+            "type": "file",
+            "file": {
+                "file_data": "not-valid-base64!",
+                "filename": "notes.txt"
             }
         }]),
         json!([{

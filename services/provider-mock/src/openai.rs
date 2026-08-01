@@ -4,6 +4,8 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -181,7 +183,7 @@ struct InputAudioContent {
 
 impl InputAudioContent {
     fn is_valid(&self) -> bool {
-        !self.data.is_empty() && matches!(self.format.as_str(), "wav" | "mp3")
+        is_valid_base64(&self.data) && matches!(self.format.as_str(), "wav" | "mp3")
     }
 }
 
@@ -200,7 +202,7 @@ impl FileContent {
         match (self.file_id.as_deref(), self.file_data.as_deref()) {
             (Some(file_id), None) => !file_id.trim().is_empty(),
             (None, Some(file_data)) => {
-                !file_data.is_empty()
+                is_valid_base64(file_data)
                     && self
                         .filename
                         .as_deref()
@@ -209,6 +211,10 @@ impl FileContent {
             _ => false,
         }
     }
+}
+
+fn is_valid_base64(value: &str) -> bool {
+    !value.is_empty() && BASE64_STANDARD.decode(value).is_ok()
 }
 
 #[derive(Deserialize)]
