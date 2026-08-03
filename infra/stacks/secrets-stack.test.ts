@@ -78,6 +78,14 @@ test('destroys integration secrets with their stack', () => {
 	}
 });
 
+test('outputs the integration API key hash secret for test discovery', () => {
+	const template = synthesizeIntegrationTemplate();
+
+	template.hasOutput('ProxyApiKeyHashSecretArn', {
+		Value: Match.anyValue(),
+	});
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const stack = new SecretsStack(app, 'TestSecretsStack');

@@ -3,6 +3,7 @@ dist/
 infra/cdk.out/
 node_modules/
 target/
+tests/integration/target/
 *.log
 .git/
 .DS_Store

@@ -33,6 +33,7 @@ const providerMockAssetExcludes = [
 	'services/provider-mock/target',
 	'services/proxy/target',
 	'target',
+	'tests/integration/target',
 ];
 
 type ProviderMockStackProps = StackProps & {

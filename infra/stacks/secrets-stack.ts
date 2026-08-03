@@ -1,5 +1,5 @@
 import type { StackProps } from 'aws-cdk-lib';
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
 
@@ -39,6 +39,10 @@ export class SecretsStack extends Stack {
 			},
 			removalPolicy,
 			secretName: `${secretNamePrefix}/proxy-api-key-hash`,
+		});
+
+		new CfnOutput(this, 'ProxyApiKeyHashSecretArn', {
+			value: this.proxyApiKeyHashSecret.secretArn,
 		});
 	}
 }

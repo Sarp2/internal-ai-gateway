@@ -669,6 +669,9 @@ test('defines deploy outputs for proxy endpoints and access logs', () => {
 	template.hasOutput('ProxyAccessLogBucketName', {
 		Description: 'S3 bucket that stores proxy ALB access logs.',
 	});
+	template.hasOutput('AwsRegion', {
+		Description: 'AWS region containing the proxy service.',
+	});
 });
 
 test('uses the configured proxy domain in the health URL output', () => {

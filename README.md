@@ -31,3 +31,22 @@ Synthesize the CDK app:
 ```bash
 pnpm synth
 ```
+
+## Integration Tests
+
+Deploy the isolated integration environment, run its Rust test suite, and destroy the environment:
+
+```bash
+pnpm integration
+```
+
+Run each step separately when the environment needs to remain available for debugging:
+
+```bash
+pnpm integration:deploy
+pnpm test:integration
+pnpm integration:destroy
+```
+
+The deploy command writes stack discovery values to `.integration/cdk-outputs.json`. The complete
+`pnpm integration` lifecycle always attempts teardown, including when deployment or tests fail.

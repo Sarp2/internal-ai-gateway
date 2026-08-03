@@ -196,6 +196,7 @@ export class EcsStack extends Stack {
 					'services/provider-mock/target',
 					'services/proxy/target',
 					'target',
+					'tests/integration/target',
 				],
 				file: 'services/proxy/Dockerfile',
 			}),
@@ -394,6 +395,11 @@ export class EcsStack extends Stack {
 		new CfnOutput(this, 'ProxyAccessLogBucketName', {
 			description: 'S3 bucket that stores proxy ALB access logs.',
 			value: this.proxyAccessLogBucket.bucketName,
+		});
+
+		new CfnOutput(this, 'AwsRegion', {
+			description: 'AWS region containing the proxy service.',
+			value: this.region,
 		});
 	}
 
