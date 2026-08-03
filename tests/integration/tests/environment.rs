@@ -137,7 +137,7 @@ async fn proxy_health_endpoint_reports_healthy() -> Result<(), Box<dyn Error>> {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.json::<Value>().await?;
-    assert_eq!(body, serde_json::json!({ "status": "healthy" }));
+    assert_eq!(body, serde_json::json!({ "status": "ok" }));
     Ok(())
 }
 
