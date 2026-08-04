@@ -79,6 +79,23 @@ test('reports cleanup failure after interruption', async () => {
 	]);
 });
 
+test('destroys resources when the interrupted operation rejects', async () => {
+	let rejectTests;
+	const testOperation = new Promise((_, reject) => {
+		rejectTests = reject;
+	});
+	const harness = createHarness({ testOperation });
+	const runPromise = harness.lifecycle.run();
+	const rejectedRun = assert.rejects(runPromise, /test operation failed/);
+	await waitForCall(harness.calls, 'test');
+
+	const interruptionPromise = harness.lifecycle.handleInterruption('SIGINT');
+	rejectTests(new Error('test operation failed'));
+	await Promise.all([rejectedRun, interruptionPromise]);
+
+	assert.deepEqual(harness.calls, ['deploy', 'test', 'stop:SIGINT', 'destroy', 'exit:130']);
+});
+
 function createHarness({
 	deployExitCode = 0,
 	destroyExitCode = 0,

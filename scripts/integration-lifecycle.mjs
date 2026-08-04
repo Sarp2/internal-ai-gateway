@@ -44,7 +44,7 @@ export function createIntegrationLifecycle({ deploy, destroy, exit, logError, ru
 		if (cleanupPromise === undefined) {
 			const interruptedOperation = activeOperation;
 			stop(signal);
-			await interruptedOperation;
+			await interruptedOperation?.catch(() => {});
 		}
 
 		const destroyExitCode = await destroyOnce();
