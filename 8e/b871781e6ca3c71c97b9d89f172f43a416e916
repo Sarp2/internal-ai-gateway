@@ -1,0 +1,27 @@
+scripts/integration-lifecycle.test.mjs
+  s_c26b496cd2589a::t_01d9f1682f83db 1-115
+scripts/integration-lifecycle.mjs
+  s_c26b496cd2589a::t_01d9f1682f83db 1-19,24-66
+  s_c26b496cd2589a::t_acb8ae4eaf4f92 20-23
+scripts/integration.mjs
+  s_c26b496cd2589a::t_95790481ca0ecb 10,17-25,28,30-33,36,80
+  s_c26b496cd2589a::t_01d9f1682f83db 3,71-78,81-82,88,91,94
+package.json
+  s_c26b496cd2589a::t_01d9f1682f83db 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "8eb871781e6ca3c71c97b9d89f172f43a416e916",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
