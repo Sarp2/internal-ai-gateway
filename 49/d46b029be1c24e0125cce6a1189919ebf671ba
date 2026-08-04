@@ -1,0 +1,23 @@
+scripts/integration-output.mjs
+  s_c26b496cd2589a::t_186c01e3c4caf4 1-6
+scripts/integration-output.test.mjs
+  s_c26b496cd2589a::t_186c01e3c4caf4 1-23
+scripts/integration.mjs
+  s_c26b496cd2589a::t_186c01e3c4caf4 2,4,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "49d46b029be1c24e0125cce6a1189919ebf671ba",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
