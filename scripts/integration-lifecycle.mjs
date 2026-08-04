@@ -16,11 +16,8 @@ export function createIntegrationLifecycle({ deploy, destroy, exit, logError, ru
 		}
 	}
 
-    function destroyOnce() {
-        if (cleanupPromise === null || cleanupPromise === undefined) {
-            cleanupPromise = destroyInfrastructure();
-        }
-
+	function destroyOnce() {
+		cleanupPromise ??= execute(destroy);
 		return cleanupPromise;
 	}
 

@@ -69,6 +69,7 @@ test('outputs integration table names for test discovery', () => {
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const stack = new DynamoDbStack(app, 'TestIntegrationDynamoDbStack', {
+		outputResourceNames: true,
 		removalPolicy: RemovalPolicy.DESTROY,
 	});
 

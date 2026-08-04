@@ -5,6 +5,7 @@ import type { Construct } from 'constructs';
 import { GatewayDynamoDbTables } from './gateway-dynamodb-tables.ts';
 
 type DynamoDbStackProps = StackProps & {
+	outputResourceNames?: boolean;
 	removalPolicy?: RemovalPolicy;
 };
 
@@ -28,20 +29,22 @@ export class DynamoDbStack extends Stack {
 		this.rateLimitTable = tables.rateLimitTable;
 		this.tokenUsageTable = tables.tokenUsageTable;
 
-		new CfnOutput(this, 'EngineersTableName', {
-			value: this.engineersTable.tableName,
-		});
-		new CfnOutput(this, 'EngineersApiKeyIndexName', {
-			value: this.engineersApiKeyIndexName,
-		});
-		new CfnOutput(this, 'MessagesTableName', {
-			value: this.messagesTable.tableName,
-		});
-		new CfnOutput(this, 'RateLimitTableName', {
-			value: this.rateLimitTable.tableName,
-		});
-		new CfnOutput(this, 'TokenUsageTableName', {
-			value: this.tokenUsageTable.tableName,
-		});
+		if (props?.outputResourceNames) {
+			new CfnOutput(this, 'EngineersTableName', {
+				value: this.engineersTable.tableName,
+			});
+			new CfnOutput(this, 'EngineersApiKeyIndexName', {
+				value: this.engineersApiKeyIndexName,
+			});
+			new CfnOutput(this, 'MessagesTableName', {
+				value: this.messagesTable.tableName,
+			});
+			new CfnOutput(this, 'RateLimitTableName', {
+				value: this.rateLimitTable.tableName,
+			});
+			new CfnOutput(this, 'TokenUsageTableName', {
+				value: this.tokenUsageTable.tableName,
+			});
+		}
 	}
 }

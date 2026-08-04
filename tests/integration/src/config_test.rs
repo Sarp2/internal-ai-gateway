@@ -42,6 +42,17 @@ fn rejects_outputs_with_invalid_resource_shapes() {
     );
 }
 
+#[test]
+fn accepts_https_proxy_health_url() {
+    let mut outputs = valid_outputs();
+    outputs[ECS_STACK]["ProxyHealthUrl"] = json!("https://proxy.example/health");
+
+    let config = IntegrationConfig::from_outputs(&outputs)
+        .expect("HTTPS proxy health URL should be accepted");
+
+    assert_eq!(config.proxy_health_url, "https://proxy.example/health");
+}
+
 fn valid_outputs() -> serde_json::Value {
     json!({
         (DYNAMODB_STACK): {

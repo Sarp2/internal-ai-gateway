@@ -102,7 +102,7 @@ impl IntegrationConfig {
 
 fn validate_health_url(value: &str) -> Result<(), String> {
     let url = parse_url(value, "proxy health URL")?;
-    if url.scheme() != "http"
+    if !matches!(url.scheme(), "http" | "https")
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()

@@ -26,11 +26,11 @@ test('destroys resources when integration tests fail', async () => {
 test('destroys resources once when interrupted', async () => {
 	let finishTests;
 
-    const testOperation = new Promise((resolve) => {
+	const testOperation = new Promise((resolve) => {
 		finishTests = resolve;
 	});
 
-    const harness = createHarness({ testOperation });
+	const harness = createHarness({ testOperation });
 	const runPromise = harness.lifecycle.run();
 	await waitForCall(harness.calls, 'test');
 
@@ -45,7 +45,7 @@ test('does not destroy resources twice for repeated signals', async () => {
 	let finishTests;
 	const testOperation = new Promise((resolve) => {
 		finishTests = resolve;
-    });
+	});
 
 	const harness = createHarness({ testOperation });
 	const runPromise = harness.lifecycle.run();
@@ -65,7 +65,7 @@ test('reports cleanup failure after interruption', async () => {
 		finishTests = resolve;
 	});
 
-    const harness = createHarness({ destroyExitCode: 1, testOperation });
+	const harness = createHarness({ destroyExitCode: 1, testOperation });
 	const runPromise = harness.lifecycle.run();
 	await waitForCall(harness.calls, 'test');
 
