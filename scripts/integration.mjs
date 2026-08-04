@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
-import { mkdir, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { createIntegrationLifecycle } from './integration-lifecycle.mjs';
+import { prepareIntegrationOutput } from './integration-output.mjs';
 
 const outputDirectory = '.integration';
 const outputsFile = `${outputDirectory}/cdk-outputs.json`;
@@ -39,7 +40,7 @@ function run(commandName, args) {
 }
 
 async function deploy() {
-	await mkdir(outputDirectory, { recursive: true });
+	await prepareIntegrationOutput(outputDirectory, outputsFile);
 	return run(pnpm, [
 		'cdk',
 		'deploy',
