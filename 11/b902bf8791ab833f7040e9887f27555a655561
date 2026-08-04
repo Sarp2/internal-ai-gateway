@@ -1,0 +1,33 @@
+tests/integration/src/lib.rs
+  s_c26b496cd2589a::t_2717d9956c6d87 105
+tests/integration/src/config_test.rs
+  s_c26b496cd2589a::t_2717d9956c6d87 45-55
+scripts/integration-lifecycle.mjs
+  s_c26b496cd2589a::t_4d6ce37a7e0b38 19-20
+infra/stacks/integration-dynamodb-stack.test.ts
+  s_c26b496cd2589a::t_a35fb0e362ba6e 72
+scripts/integration-lifecycle.test.mjs
+  s_c26b496cd2589a::t_c5995640c1e6d7 29,33,48,68
+infra/bin/app.ts
+  s_c26b496cd2589a::t_a35fb0e362ba6e 77
+infra/stacks/dynamodb-stack.ts
+  s_c26b496cd2589a::t_a35fb0e362ba6e 8,32-48
+infra/stacks/dynamodb-stack.test.ts
+  s_c26b496cd2589a::t_a35fb0e362ba6e 96-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "11b902bf8791ab833f7040e9887f27555a655561",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
