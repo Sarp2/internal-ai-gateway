@@ -1,28 +1,39 @@
 import { spawn } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
+import { createIntegrationLifecycle } from './integration-lifecycle.mjs';
 
 const outputDirectory = '.integration';
 const outputsFile = `${outputDirectory}/cdk-outputs.json`;
 const integrationStackPattern = 'InternalAiGatewayIntegration*';
 const command = process.argv[2];
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+let activeChild;
 
 function run(commandName, args) {
 	return new Promise((resolve) => {
 		const child = spawn(commandName, args, {
 			stdio: 'inherit',
 		});
+		activeChild = child;
+
+		const finish = (exitCode) => {
+			if (activeChild === child) {
+				activeChild = undefined;
+			}
+			resolve(exitCode);
+		};
+
 		child.on('error', (error) => {
 			console.error(error.message);
-			resolve(1);
+			finish(1);
 		});
-		child.on('exit', (code, signal) => {
-			if (signal) {
-				console.error(`${commandName} exited after receiving ${signal}`);
-				resolve(1);
+		child.on('exit', (code, childSignal) => {
+			if (childSignal) {
+				console.error(`${commandName} exited after receiving ${childSignal}`);
+				finish(1);
 				return;
 			}
-			resolve(code ?? 1);
+			finish(code ?? 1);
 		});
 	});
 }
@@ -57,28 +68,30 @@ async function destroy() {
 	return exitCode;
 }
 
-async function runCompleteLifecycle() {
-	const deployExitCode = await deploy();
-	if (deployExitCode !== 0) {
-		const destroyExitCode = await destroy();
-		return deployExitCode || destroyExitCode;
-	}
+const lifecycle = createIntegrationLifecycle({
+	deploy,
+	destroy,
+	exit: (code) => process.exit(code),
+	logError: (message) => console.error(message),
+	runTests: () => run(pnpm, ['test:integration']),
+	stop: (signal) => activeChild?.kill(signal),
+});
 
-	const testExitCode = await run(pnpm, ['test:integration']);
-	const destroyExitCode = await destroy();
-	return testExitCode || destroyExitCode;
+if (command === 'run') {
+	process.once('SIGINT', () => void lifecycle.handleInterruption('SIGINT'));
+	process.once('SIGTERM', () => void lifecycle.handleInterruption('SIGTERM'));
 }
 
 let exitCode;
 switch (command) {
 	case 'deploy':
-		exitCode = await deploy();
+		exitCode = await lifecycle.deploy();
 		break;
 	case 'destroy':
-		exitCode = await destroy();
+		exitCode = await lifecycle.destroy();
 		break;
 	case 'run':
-		exitCode = await runCompleteLifecycle();
+		exitCode = await lifecycle.run();
 		break;
 	default:
 		console.error('Usage: node scripts/integration.mjs <deploy|destroy|run>');
