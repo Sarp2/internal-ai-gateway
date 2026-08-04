@@ -74,6 +74,7 @@ if (integrationTestsEnabled) {
 		app,
 		'InternalAiGatewayIntegrationDynamoDbStack',
 		{
+			outputResourceNames: true,
 			removalPolicy: RemovalPolicy.DESTROY,
 		},
 	);

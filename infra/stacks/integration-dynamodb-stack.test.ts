@@ -46,9 +46,30 @@ test('destroys integration tables with their stack', () => {
 	}
 });
 
+test('outputs integration table names for test discovery', () => {
+	const template = synthesizeTemplate();
+
+	template.hasOutput('EngineersTableName', {
+		Value: Match.anyValue(),
+	});
+	template.hasOutput('EngineersApiKeyIndexName', {
+		Value: 'ApiKeyIndex',
+	});
+	template.hasOutput('MessagesTableName', {
+		Value: Match.anyValue(),
+	});
+	template.hasOutput('RateLimitTableName', {
+		Value: Match.anyValue(),
+	});
+	template.hasOutput('TokenUsageTableName', {
+		Value: Match.anyValue(),
+	});
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const stack = new DynamoDbStack(app, 'TestIntegrationDynamoDbStack', {
+		outputResourceNames: true,
 		removalPolicy: RemovalPolicy.DESTROY,
 	});
 

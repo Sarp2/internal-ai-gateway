@@ -11,6 +11,7 @@
 			"*.json",
 			"*.jsonc",
 			"*.ts",
+			"scripts/**",
 			"infra/**",
 			"functions/**",
 			"services/**/Cargo.toml",

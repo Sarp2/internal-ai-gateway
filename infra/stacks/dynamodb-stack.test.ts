@@ -93,6 +93,14 @@ test('defines token usage table with TTL for quota windows', () => {
 	});
 });
 
+test('does not output table names for production discovery', () => {
+	const template = synthesizeTemplate();
+
+	template.templateMatches({
+		Outputs: Match.absent(),
+	});
+});
+
 function synthesizeTemplate(): Template {
 	const app = new App();
 	const stack = new DynamoDbStack(app, 'TestDynamoDbStack');

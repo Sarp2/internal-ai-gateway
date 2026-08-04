@@ -2,5 +2,6 @@ node_modules/
 dist/
 cdk.out/
 target/
+.integration/
 .DS_Store
 *.log

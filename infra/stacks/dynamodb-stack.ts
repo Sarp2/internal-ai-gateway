@@ -1,10 +1,11 @@
 import type { StackProps } from 'aws-cdk-lib';
-import { RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { CfnOutput, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import type { Table } from 'aws-cdk-lib/aws-dynamodb';
 import type { Construct } from 'constructs';
 import { GatewayDynamoDbTables } from './gateway-dynamodb-tables.ts';
 
 type DynamoDbStackProps = StackProps & {
+	outputResourceNames?: boolean;
 	removalPolicy?: RemovalPolicy;
 };
 
@@ -27,5 +28,23 @@ export class DynamoDbStack extends Stack {
 		this.messagesTable = tables.messagesTable;
 		this.rateLimitTable = tables.rateLimitTable;
 		this.tokenUsageTable = tables.tokenUsageTable;
+
+		if (props?.outputResourceNames) {
+			new CfnOutput(this, 'EngineersTableName', {
+				value: this.engineersTable.tableName,
+			});
+			new CfnOutput(this, 'EngineersApiKeyIndexName', {
+				value: this.engineersApiKeyIndexName,
+			});
+			new CfnOutput(this, 'MessagesTableName', {
+				value: this.messagesTable.tableName,
+			});
+			new CfnOutput(this, 'RateLimitTableName', {
+				value: this.rateLimitTable.tableName,
+			});
+			new CfnOutput(this, 'TokenUsageTableName', {
+				value: this.tokenUsageTable.tableName,
+			});
+		}
 	}
 }
