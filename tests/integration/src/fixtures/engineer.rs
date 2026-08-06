@@ -151,7 +151,9 @@ async fn wait_for_api_key_index(
     .map_err(|_| {
         io::Error::new(
             io::ErrorKind::TimedOut,
-            format!("API key hash was not visible in index {index_name} within 10 seconds"),
+            format!(
+                "API key hash was not visible in index {index_name} within {INDEX_PROPAGATION_TIMEOUT:?}"
+            ),
         )
     })?
 }
