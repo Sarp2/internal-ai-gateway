@@ -1,0 +1,32 @@
+tests/integration/src/fixtures/engineer_test.rs
+  s_c26b496cd2589a::t_acc5c6e240bda0 1-35,37-38
+  s_c26b496cd2589a::t_50e8068e6fbfdf 36
+tests/integration/src/fixtures/mod.rs
+  s_c26b496cd2589a::t_acc5c6e240bda0 1-4
+tests/integration/src/lib.rs
+  s_c26b496cd2589a::t_acc5c6e240bda0 7-8
+tests/integration/Cargo.toml
+  s_c26b496cd2589a::t_acc5c6e240bda0 12-13,16,19
+tests/integration/src/fixtures/engineer.rs
+  s_c26b496cd2589a::t_61f00af00d168f 24-33,112,119
+  s_c26b496cd2589a::t_89eca06693b730 113-114,133
+  s_c26b496cd2589a::t_acc5c6e240bda0 1-23,34-111,115-118,120-132,134-150
+tests/integration/Cargo.lock
+  s_c26b496cd2589a::t_0529dddc9499ce 287,291,704,917-925,1232-1233,1236,1239,1773-1783,2163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "133041da6c9fa93fce8e4c6a9d271bab0fcc78ab",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
