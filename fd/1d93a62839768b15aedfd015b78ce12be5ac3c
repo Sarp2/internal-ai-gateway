@@ -1,0 +1,29 @@
+tests/integration/src/fixtures/engineer_test.rs
+  s_c26b496cd2589a::t_d9430e6e4e6c82 3-4,7-9,45-51,53-68,73-77
+  s_c26b496cd2589a::t_09edf7222e6964 69-72
+  s_c26b496cd2589a::t_c75e1009d885ae 5,52,78-82
+  s_c26b496cd2589a::t_1ddd0ff7b885e9 6
+tests/integration/src/fixtures/engineer.rs
+  s_c26b496cd2589a::t_c75e1009d885ae 193
+  s_c26b496cd2589a::t_d9430e6e4e6c82 3,5,12,20,46-47,51-85,136-137,151-175,181-192,194-265
+tests/integration/Cargo.toml
+  s_c26b496cd2589a::t_e47f1a772f0a6a 12
+tests/integration/Cargo.lock
+  s_c26b496cd2589a::t_7c8f6cda76089b 806-816,831,833,836,1244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "fd1d93a62839768b15aedfd015b78ce12be5ac3c",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
