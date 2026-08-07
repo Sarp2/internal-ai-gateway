@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use url::Url;
 
+pub mod fixtures;
+
 #[cfg(test)]
 mod config_test;
 
