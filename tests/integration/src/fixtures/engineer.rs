@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::future::Future;
 use std::io;
+use std::panic::{AssertUnwindSafe, resume_unwind};
 use std::time::Duration;
 
 use aws_config::SdkConfig;
 use aws_sdk_dynamodb::Client as DynamoDbClient;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_secretsmanager::Client as SecretsManagerClient;
+use futures_util::FutureExt;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use tokio::time::{sleep, timeout};
@@ -14,7 +17,7 @@ use uuid::Uuid;
 
 use crate::IntegrationConfig;
 
-type FixtureError = Box<dyn Error + Send + Sync>;
+pub type FixtureError = Box<dyn Error + Send + Sync>;
 type HmacSha256 = Hmac<Sha256>;
 const INDEX_PROPAGATION_TIMEOUT: Duration = Duration::from_secs(10);
 const INITIAL_INDEX_POLL_DELAY: Duration = Duration::from_millis(50);
@@ -40,7 +43,44 @@ pub struct EngineerFixture {
     api_key: String,
     dynamodb_client: DynamoDbClient,
     engineers_table_name: String,
+    rate_limit_table_name: String,
+    token_usage_table_name: String,
     user_id: String,
+}
+
+#[derive(Clone)]
+pub struct EngineerFixtureContext {
+    api_key: String,
+    user_id: String,
+}
+
+impl EngineerFixtureContext {
+    pub fn api_key(&self) -> &str {
+        &self.api_key
+    }
+
+    pub fn user_id(&self) -> &str {
+        &self.user_id
+    }
+}
+
+pub async fn with_engineer_fixture<T, F, Fut>(
+    config: &IntegrationConfig,
+    sdk_config: &SdkConfig,
+    options: EngineerFixtureOptions,
+    test: F,
+) -> Result<T, FixtureError>
+where
+    F: FnOnce(EngineerFixtureContext) -> Fut,
+    Fut: Future<Output = Result<T, FixtureError>>,
+{
+    let fixture = EngineerFixture::create(config, sdk_config, options).await?;
+    let context = EngineerFixtureContext {
+        api_key: fixture.api_key.clone(),
+        user_id: fixture.user_id.clone(),
+    };
+
+    run_scoped(test(context), || fixture.cleanup()).await
 }
 
 impl EngineerFixture {
@@ -93,6 +133,8 @@ impl EngineerFixture {
             api_key,
             dynamodb_client,
             engineers_table_name: config.engineers_table_name.clone(),
+            rate_limit_table_name: config.rate_limit_table_name.clone(),
+            token_usage_table_name: config.token_usage_table_name.clone(),
             user_id,
         })
     }
@@ -106,12 +148,121 @@ impl EngineerFixture {
     }
 
     pub async fn cleanup(self) -> Result<(), FixtureError> {
-        delete_engineer(
+        let mut errors = Vec::new();
+
+        if let Err(error) = delete_partition_rows(
+            &self.dynamodb_client,
+            &self.rate_limit_table_name,
+            "request_ts",
+            &self.user_id,
+        )
+        .await
+        {
+            errors.push(format!("rate-limit cleanup failed: {error}"));
+        }
+
+        if let Err(error) = delete_partition_rows(
+            &self.dynamodb_client,
+            &self.token_usage_table_name,
+            "usage_window",
+            &self.user_id,
+        )
+        .await
+        {
+            errors.push(format!("token-usage cleanup failed: {error}"));
+        }
+
+        if let Err(error) = delete_engineer(
             &self.dynamodb_client,
             &self.engineers_table_name,
             &self.user_id,
         )
         .await
+        {
+            errors.push(format!("engineer cleanup failed: {error}"));
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(io::Error::other(errors.join("; ")).into())
+        }
+    }
+}
+
+pub(super) async fn run_scoped<T, TestFuture, Cleanup, CleanupFuture>(
+    test: TestFuture,
+    cleanup: Cleanup,
+) -> Result<T, FixtureError>
+where
+    TestFuture: Future<Output = Result<T, FixtureError>>,
+    Cleanup: FnOnce() -> CleanupFuture,
+    CleanupFuture: Future<Output = Result<(), FixtureError>>,
+{
+    let test_result = AssertUnwindSafe(test).catch_unwind().await;
+    let cleanup_result = cleanup().await;
+
+    match (test_result, cleanup_result) {
+        (Ok(result), Ok(())) => result,
+        (Ok(Ok(_)), Err(cleanup_error)) => Err(cleanup_error),
+        (Ok(Err(test_error)), Err(cleanup_error)) => Err(io::Error::other(format!(
+            "test failed: {test_error}; fixture cleanup failed: {cleanup_error}"
+        ))
+        .into()),
+        (Err(panic), cleanup_result) => {
+            if let Err(cleanup_error) = cleanup_result {
+                eprintln!("fixture cleanup failed after test panic: {cleanup_error}");
+            }
+            resume_unwind(panic)
+        }
+    }
+}
+
+async fn delete_partition_rows(
+    client: &DynamoDbClient,
+    table_name: &str,
+    sort_key_name: &str,
+    user_id: &str,
+) -> Result<(), FixtureError> {
+    let mut exclusive_start_key = None;
+
+    loop {
+        let response = client
+            .query()
+            .table_name(table_name)
+            .key_condition_expression("#user_id = :user_id")
+            .expression_attribute_names("#user_id", "user_id")
+            .expression_attribute_values(":user_id", AttributeValue::S(user_id.to_string()))
+            .projection_expression("#user_id, #sort_key")
+            .expression_attribute_names("#sort_key", sort_key_name)
+            .set_exclusive_start_key(exclusive_start_key)
+            .consistent_read(true)
+            .send()
+            .await?;
+
+        for item in response.items() {
+            let sort_key = item.get(sort_key_name).cloned().ok_or_else(|| {
+                io::Error::other(format!(
+                    "{table_name} cleanup row is missing sort key {sort_key_name}"
+                ))
+            })?;
+
+            client
+                .delete_item()
+                .table_name(table_name)
+                .key("user_id", AttributeValue::S(user_id.to_string()))
+                .key(sort_key_name, sort_key)
+                .send()
+                .await?;
+        }
+
+        exclusive_start_key = response
+            .last_evaluated_key()
+            .filter(|key| !key.is_empty())
+            .cloned();
+        if exclusive_start_key.is_none() {
+            return Ok(());
+        }
     }
 }
 
