@@ -3,13 +3,16 @@ import { fileURLToPath } from 'node:url';
 import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import {
 	type Cluster,
 	ContainerImage,
+	CpuArchitecture,
 	FargateService,
 	FargateTaskDefinition,
 	type ICluster,
 	LogDrivers,
+	OperatingSystemFamily,
 } from 'aws-cdk-lib/aws-ecs';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import {
@@ -105,6 +108,10 @@ export class ProviderMockStack extends Stack {
 				cpu: 256,
 				family: `internal-ai-gateway-integration-${configuration.serviceName}`,
 				memoryLimitMiB: 512,
+				runtimePlatform: {
+					cpuArchitecture: CpuArchitecture.X86_64,
+					operatingSystemFamily: OperatingSystemFamily.LINUX,
+				},
 			},
 		);
 
@@ -127,6 +134,7 @@ export class ProviderMockStack extends Stack {
 			image: ContainerImage.fromAsset(repositoryRoot, {
 				exclude: providerMockAssetExcludes,
 				file: 'services/provider-mock/Dockerfile',
+				platform: Platform.LINUX_AMD64,
 			}),
 			logging: LogDrivers.awsLogs({
 				logGroup,

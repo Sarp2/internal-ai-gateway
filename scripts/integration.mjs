@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createIntegrationLifecycle } from './integration-lifecycle.mjs';
 import { prepareIntegrationOutput } from './integration-output.mjs';
 
-const outputDirectory = '.integration';
-const outputsFile = `${outputDirectory}/cdk-outputs.json`;
+const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = resolve(currentDirectory, '..');
+const outputDirectory = resolve(repositoryRoot, '.integration');
+const outputsFile = resolve(outputDirectory, 'cdk-outputs.json');
 const integrationStackPattern = 'InternalAiGatewayIntegration*';
 const command = process.argv[2];
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';

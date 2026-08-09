@@ -33,7 +33,11 @@ impl IntegrationConfig {
     pub fn load() -> Result<Self, String> {
         let outputs_file = std::env::var_os("INTEGRATION_OUTPUTS_FILE")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(DEFAULT_OUTPUTS_FILE));
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(DEFAULT_OUTPUTS_FILE)
+            });
         Self::from_outputs_file(&outputs_file)
     }
 
