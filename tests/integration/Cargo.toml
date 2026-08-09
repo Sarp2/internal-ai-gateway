@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-aws-config = "1.8.18"
+aws-config = { version = "1.8.18", features = ["credentials-login"] }
 aws-sdk-dynamodb = "1.105.0"
 aws-sdk-secretsmanager = "1.108.0"
 aws-sdk-sqs = "1.90.0"

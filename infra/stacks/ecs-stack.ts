@@ -19,14 +19,17 @@ import {
 import type { Table } from 'aws-cdk-lib/aws-dynamodb';
 import type { IVpc, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Peer, Port, SecurityGroup, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import {
 	Cluster,
 	ContainerImage,
 	ContainerInsights,
+	CpuArchitecture,
 	FargateService,
 	FargateTaskDefinition,
 	type ICluster,
 	LogDrivers,
+	OperatingSystemFamily,
 } from 'aws-cdk-lib/aws-ecs';
 import {
 	ApplicationLoadBalancer,
@@ -143,6 +146,10 @@ export class EcsStack extends Stack {
 			cpu: 512,
 			ephemeralStorageGiB: 100,
 			memoryLimitMiB: 1024,
+			runtimePlatform: {
+				cpuArchitecture: CpuArchitecture.ARM64,
+				operatingSystemFamily: OperatingSystemFamily.LINUX,
+			},
 		});
 
 		this.proxyTaskDefinition.addToTaskRolePolicy(
@@ -199,6 +206,7 @@ export class EcsStack extends Stack {
 					'tests/integration/target',
 				],
 				file: 'services/proxy/Dockerfile',
+				platform: Platform.LINUX_ARM64,
 			}),
 			essential: true,
 			environment: {
