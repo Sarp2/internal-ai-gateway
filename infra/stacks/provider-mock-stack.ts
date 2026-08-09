@@ -109,7 +109,7 @@ export class ProviderMockStack extends Stack {
 				family: `internal-ai-gateway-integration-${configuration.serviceName}`,
 				memoryLimitMiB: 512,
 				runtimePlatform: {
-					cpuArchitecture: CpuArchitecture.ARM64,
+					cpuArchitecture: CpuArchitecture.X86_64,
 					operatingSystemFamily: OperatingSystemFamily.LINUX,
 				},
 			},
@@ -134,7 +134,7 @@ export class ProviderMockStack extends Stack {
 			image: ContainerImage.fromAsset(repositoryRoot, {
 				exclude: providerMockAssetExcludes,
 				file: 'services/provider-mock/Dockerfile',
-				platform: Platform.LINUX_ARM64,
+				platform: Platform.LINUX_AMD64,
 			}),
 			logging: LogDrivers.awsLogs({
 				logGroup,

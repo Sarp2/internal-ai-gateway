@@ -147,7 +147,7 @@ export class EcsStack extends Stack {
 			ephemeralStorageGiB: 100,
 			memoryLimitMiB: 1024,
 			runtimePlatform: {
-				cpuArchitecture: CpuArchitecture.ARM64,
+				cpuArchitecture: CpuArchitecture.X86_64,
 				operatingSystemFamily: OperatingSystemFamily.LINUX,
 			},
 		});
@@ -206,7 +206,7 @@ export class EcsStack extends Stack {
 					'tests/integration/target',
 				],
 				file: 'services/proxy/Dockerfile',
-				platform: Platform.LINUX_ARM64,
+				platform: Platform.LINUX_AMD64,
 			}),
 			essential: true,
 			environment: {

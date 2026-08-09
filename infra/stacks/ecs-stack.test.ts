@@ -56,7 +56,7 @@ test('defines a Fargate task definition for the proxy container', () => {
 		NetworkMode: 'awsvpc',
 		RequiresCompatibilities: ['FARGATE'],
 		RuntimePlatform: {
-			CpuArchitecture: 'ARM64',
+			CpuArchitecture: 'X86_64',
 			OperatingSystemFamily: 'LINUX',
 		},
 	});
