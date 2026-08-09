@@ -72,6 +72,17 @@ test('runs both provider mocks as private Fargate services', () => {
 	});
 });
 
+test('runs provider mocks on the production Linux ARM64 platform', () => {
+	const template = synthesizeTemplate();
+
+	template.allResourcesProperties('AWS::ECS::TaskDefinition', {
+		RuntimePlatform: {
+			CpuArchitecture: 'ARM64',
+			OperatingSystemFamily: 'LINUX',
+		},
+	});
+});
+
 test('registers both provider mocks in private DNS', () => {
 	const template = synthesizeTemplate();
 
