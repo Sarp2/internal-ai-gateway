@@ -1,0 +1,36 @@
+tests/integration/tests/authentication.rs
+  s_c26b496cd2589a::t_09bab548049124 46-47,57,70-71,78,117,121-142
+  s_c26b496cd2589a::t_a1dbb2aacaa608 1-45,48-56,58-69,72-77,79-116,118-120,143-148
+infra/stacks/provider-mock-stack.ts
+  s_c26b496cd2589a::t_44285dcc393def 6
+  s_c26b496cd2589a::t_1be61ef36b5e77 10,15,111-114,137
+scripts/integration.mjs
+  s_c26b496cd2589a::t_bb7f8ab336e739 3-4,8-11
+infra/stacks/ecs-stack.ts
+  s_c26b496cd2589a::t_44285dcc393def 22
+  s_c26b496cd2589a::t_1be61ef36b5e77 27,32,149-152,209
+tests/integration/src/lib.rs
+  s_c26b496cd2589a::t_f4c5fe5150524d 36-40
+tests/integration/Cargo.toml
+  s_c26b496cd2589a::t_fe446c2b18be06 8
+services/proxy/Dockerfile
+  s_c26b496cd2589a::t_33266f73889416 3-4
+tests/integration/Cargo.lock
+  s_c26b496cd2589a::t_ae9e519d13c55d 34,46,51-52,54,59,175-200,542-547,564-569,648,666-671,712-723,752-762,776,788,810-823,830-849,872-881,968,994,998-1008,1501-1521,1540-1549,1571-1588,1627,1669-1679,1688-1707,1722,1769-1778,1910-1923,2057-2066,2099-2108,2668-2687
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "506a04f72104327748078833f9459080080ef08e",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
