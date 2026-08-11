@@ -49,18 +49,18 @@ async fn keeps_rate_limits_independent_between_engineers() -> Result<(), Fixture
         &environment.sdk_config,
         EngineerFixtureOptions::default(),
         |limited_engineer| async move {
-            test_environment
-                .seed_current_window(
-                    limited_engineer.user_id(),
-                    test_environment.config.rate_limit_requests_per_window,
-                )
-                .await?;
-
             with_engineer_fixture(
                 &test_environment.config,
                 &test_environment.sdk_config,
                 EngineerFixtureOptions::default(),
                 |other_engineer| async move {
+                    test_environment
+                        .seed_current_window(
+                            limited_engineer.user_id(),
+                            test_environment.config.rate_limit_requests_per_window,
+                        )
+                        .await?;
+
                     let rejected = test_environment
                         .send_messages(limited_engineer.api_key())
                         .await?;
