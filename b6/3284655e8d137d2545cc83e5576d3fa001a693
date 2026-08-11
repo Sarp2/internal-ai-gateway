@@ -1,0 +1,20 @@
+tests/integration/tests/rate_limit.rs
+  s_c26b496cd2589a::t_647481cd921ab0 1-20,22-26,29-31,33-34,36-44,46-50,53-56,59,62-65,69-81,83-87,89,91-97,99-154,156-161,163-209
+  s_c26b496cd2589a::t_c5c8dba7f6d6ab 21,27-28,32,35,45,51-52,57-58,60-61,66-68,82,88,90,98,155,162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b63284655e8d137d2545cc83e5576d3fa001a693",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
