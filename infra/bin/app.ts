@@ -103,6 +103,7 @@ if (integrationTestsEnabled) {
 		engineersTable: integrationDynamoDbStack.engineersTable,
 		openAiApiKeySecret: integrationSecretsStack.openAiApiKeySecret,
 		openAiBaseUrl: integrationOpenAiBaseUrl,
+		outputIntegrationConfig: true,
 		proxyApiKeyHashSecret: integrationSecretsStack.proxyApiKeyHashSecret,
 		proxyLogGroupName: '/internal-ai-gateway/integration/proxy',
 		proxyResourceName: 'internal-ai-gateway-integration-proxy',

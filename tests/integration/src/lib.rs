@@ -23,7 +23,9 @@ pub struct IntegrationConfig {
     pub messages_table_name: String,
     pub proxy_api_key_hash_secret_arn: String,
     pub proxy_health_url: String,
+    pub rate_limit_requests_per_window: u64,
     pub rate_limit_table_name: String,
+    pub rate_limit_window_seconds: u64,
     pub token_reconciliation_queue_url: String,
     pub token_reconciliation_dead_letter_queue_url: String,
     pub token_usage_table_name: String,
@@ -66,7 +68,17 @@ impl IntegrationConfig {
                 "ProxyApiKeyHashSecretArn",
             )?,
             proxy_health_url: output(outputs, ECS_STACK, "ProxyHealthUrl")?,
+            rate_limit_requests_per_window: positive_u64_output(
+                outputs,
+                ECS_STACK,
+                "RateLimitRequestsPerWindow",
+            )?,
             rate_limit_table_name: output(outputs, DYNAMODB_STACK, "RateLimitTableName")?,
+            rate_limit_window_seconds: positive_u64_output(
+                outputs,
+                ECS_STACK,
+                "RateLimitWindowSeconds",
+            )?,
             token_reconciliation_queue_url: output(
                 outputs,
                 RECONCILIATION_STACK,
@@ -177,4 +189,13 @@ fn output(outputs: &Value, stack: &str, name: &str) -> Result<String, String> {
         .filter(|value| !value.trim().is_empty())
         .map(str::to_owned)
         .ok_or_else(|| format!("missing integration output {stack}.{name}"))
+}
+
+fn positive_u64_output(outputs: &Value, stack: &str, name: &str) -> Result<u64, String> {
+    let value = output(outputs, stack, name)?;
+    value
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("integration output {stack}.{name} must be a positive integer"))
 }

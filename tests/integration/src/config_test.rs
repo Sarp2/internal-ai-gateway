@@ -11,6 +11,8 @@ fn reads_required_stack_outputs() {
     assert_eq!(config.aws_region, "eu-north-1");
     assert_eq!(config.engineers_table_name, "engineers");
     assert_eq!(config.proxy_health_url, "http://proxy.example/health");
+    assert_eq!(config.rate_limit_requests_per_window, 120);
+    assert_eq!(config.rate_limit_window_seconds, 60);
     assert_eq!(
         config.token_reconciliation_dead_letter_queue_url,
         "https://sqs.eu-north-1.amazonaws.com/123456789012/internal-ai-gateway-integration-token-reconciliation-dlq"
@@ -53,6 +55,20 @@ fn accepts_https_proxy_health_url() {
     assert_eq!(config.proxy_health_url, "https://proxy.example/health");
 }
 
+#[test]
+fn rejects_invalid_rate_limit_outputs() {
+    let mut outputs = valid_outputs();
+    outputs[ECS_STACK]["RateLimitWindowSeconds"] = json!("0");
+
+    let error = IntegrationConfig::from_outputs(&outputs)
+        .expect_err("zero rate limit window should be rejected");
+
+    assert_eq!(
+        error,
+        "integration output InternalAiGatewayIntegrationEcsStack.RateLimitWindowSeconds must be a positive integer"
+    );
+}
+
 fn valid_outputs() -> serde_json::Value {
     json!({
         (DYNAMODB_STACK): {
@@ -64,7 +80,9 @@ fn valid_outputs() -> serde_json::Value {
         },
         (ECS_STACK): {
             "AwsRegion": "eu-north-1",
-            "ProxyHealthUrl": "http://proxy.example/health"
+            "ProxyHealthUrl": "http://proxy.example/health",
+            "RateLimitRequestsPerWindow": "120",
+            "RateLimitWindowSeconds": "60"
         },
         (RECONCILIATION_STACK): {
             "TokenReconciliationDeadLetterQueueUrl": "https://sqs.eu-north-1.amazonaws.com/123456789012/internal-ai-gateway-integration-token-reconciliation-dlq",

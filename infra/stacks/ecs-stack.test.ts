@@ -676,6 +676,19 @@ test('defines deploy outputs for proxy endpoints and access logs', () => {
 	template.hasOutput('AwsRegion', {
 		Description: 'AWS region containing the proxy service.',
 	});
+	assert.deepEqual(template.findOutputs('RateLimitRequestsPerWindow'), {});
+	assert.deepEqual(template.findOutputs('RateLimitWindowSeconds'), {});
+});
+
+test('outputs rate limit configuration for integration discovery', () => {
+	const template = synthesizeTemplate({ outputIntegrationConfig: true });
+
+	template.hasOutput('RateLimitRequestsPerWindow', {
+		Value: '120',
+	});
+	template.hasOutput('RateLimitWindowSeconds', {
+		Value: '60',
+	});
 });
 
 test('uses the configured proxy domain in the health URL output', () => {
@@ -775,6 +788,7 @@ function synthesizeTemplate(
 	props: {
 		anthropicBaseUrl?: string;
 		openAiBaseUrl?: string;
+		outputIntegrationConfig?: boolean;
 		proxyCertificateArn?: string;
 		proxyDomainName?: string;
 		proxyLogGroupName?: string;
@@ -797,6 +811,7 @@ function synthesizeTemplate(
 		engineersTable: dynamoDbStack.engineersTable,
 		openAiApiKeySecret,
 		openAiBaseUrl: props.openAiBaseUrl ?? 'https://api.openai.com',
+		...(props.outputIntegrationConfig ? { outputIntegrationConfig: true } : {}),
 		...(props.proxyCertificateArn ? { proxyCertificateArn: props.proxyCertificateArn } : {}),
 		...(props.proxyDomainName ? { proxyDomainName: props.proxyDomainName } : {}),
 		...(props.proxyLogGroupName ? { proxyLogGroupName: props.proxyLogGroupName } : {}),

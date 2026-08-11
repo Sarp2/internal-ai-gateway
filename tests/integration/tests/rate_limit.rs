@@ -12,9 +12,6 @@ use serde_json::{Value, json};
 use tokio::time::sleep;
 use url::Url;
 
-const RATE_LIMIT: u64 = 120;
-const RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
-
 #[tokio::test]
 async fn allows_final_request_and_rejects_request_above_limit() -> Result<(), FixtureError> {
     let environment = RateLimitEnvironment::load().await?;
@@ -26,7 +23,10 @@ async fn allows_final_request_and_rejects_request_above_limit() -> Result<(), Fi
         EngineerFixtureOptions::default(),
         |engineer| async move {
             test_environment
-                .seed_current_window(engineer.user_id(), RATE_LIMIT - 1)
+                .seed_current_window(
+                    engineer.user_id(),
+                    test_environment.config.rate_limit_requests_per_window - 1,
+                )
                 .await?;
 
             let allowed = test_environment.send_messages(engineer.api_key()).await?;
@@ -50,7 +50,10 @@ async fn keeps_rate_limits_independent_between_engineers() -> Result<(), Fixture
         EngineerFixtureOptions::default(),
         |limited_engineer| async move {
             test_environment
-                .seed_current_window(limited_engineer.user_id(), RATE_LIMIT)
+                .seed_current_window(
+                    limited_engineer.user_id(),
+                    test_environment.config.rate_limit_requests_per_window,
+                )
                 .await?;
 
             with_engineer_fixture(
@@ -86,12 +89,13 @@ async fn allows_requests_in_a_new_rate_limit_window() -> Result<(), FixtureError
         &environment.sdk_config,
         EngineerFixtureOptions::default(),
         |engineer| async move {
-            let current_window = stable_current_window().await?;
+            let window_seconds = test_environment.config.rate_limit_window_seconds;
+            let current_window = stable_current_window(window_seconds).await?;
             test_environment
                 .seed_window(
                     engineer.user_id(),
-                    current_window - RATE_LIMIT_WINDOW_SECONDS,
-                    RATE_LIMIT,
+                    current_window - window_seconds,
+                    test_environment.config.rate_limit_requests_per_window,
                 )
                 .await?;
 
@@ -138,8 +142,12 @@ impl RateLimitEnvironment {
         user_id: &str,
         request_count: u64,
     ) -> Result<(), FixtureError> {
-        self.seed_window(user_id, stable_current_window().await?, request_count)
-            .await
+        self.seed_window(
+            user_id,
+            stable_current_window(self.config.rate_limit_window_seconds).await?,
+            request_count,
+        )
+        .await
     }
 
     async fn seed_window(
@@ -159,7 +167,9 @@ impl RateLimitEnvironment {
             )
             .item(
                 "ttl",
-                AttributeValue::N((window_start + RATE_LIMIT_WINDOW_SECONDS * 2).to_string()),
+                AttributeValue::N(
+                    (window_start + self.config.rate_limit_window_seconds * 2).to_string(),
+                ),
             )
             .send()
             .await?;
@@ -185,16 +195,16 @@ impl RateLimitEnvironment {
     }
 }
 
-async fn stable_current_window() -> Result<u64, FixtureError> {
+async fn stable_current_window(window_seconds: u64) -> Result<u64, FixtureError> {
     let mut now = current_epoch_seconds()?;
-    let seconds_remaining = RATE_LIMIT_WINDOW_SECONDS - (now % RATE_LIMIT_WINDOW_SECONDS);
+    let seconds_remaining = window_seconds - (now % window_seconds);
 
     if seconds_remaining <= 5 {
         sleep(Duration::from_secs(seconds_remaining + 1)).await;
         now = current_epoch_seconds()?;
     }
 
-    Ok(now - (now % RATE_LIMIT_WINDOW_SECONDS))
+    Ok(now - (now % window_seconds))
 }
 
 fn current_epoch_seconds() -> Result<u64, FixtureError> {
