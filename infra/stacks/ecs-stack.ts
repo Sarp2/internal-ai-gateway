@@ -55,6 +55,8 @@ const proxyScaleTargetPercent = 60;
 const proxyRequestsPerTarget = 1_000;
 const proxyActiveStreamsScaleTarget = 150;
 const proxyMaxActiveStreams = 200;
+const rateLimitRequestsPerWindow = 120;
+const rateLimitWindowSeconds = 60;
 const activeStreamMetricNamespace = 'InternalAiGateway/Proxy';
 const activeStreamsMetricName = 'ActiveStreams';
 const proxyAccessLogPrefix = 'alb';
@@ -68,6 +70,7 @@ type EcsStackProps = StackProps & {
 	engineersTable: Table;
 	openAiApiKeySecret: Secret;
 	openAiBaseUrl: string;
+	outputIntegrationConfig?: boolean;
 	proxyApiKeyHashSecret: Secret;
 	proxyCertificateArn?: string;
 	proxyDomainName?: string;
@@ -222,9 +225,9 @@ export class EcsStack extends Stack {
 				PORT: String(proxyContainerPort),
 				PROXY_SERVICE_NAME: this.proxyResourceName,
 				PROXY_API_KEY_HASH_SECRET_ARN: props.proxyApiKeyHashSecret.secretArn,
-				RATE_LIMIT_REQUESTS_PER_WINDOW: '120',
+				RATE_LIMIT_REQUESTS_PER_WINDOW: String(rateLimitRequestsPerWindow),
 				RATE_LIMIT_TABLE_NAME: props.rateLimitTable.tableName,
-				RATE_LIMIT_WINDOW_SECONDS: '60',
+				RATE_LIMIT_WINDOW_SECONDS: String(rateLimitWindowSeconds),
 				TOKEN_USAGE_TABLE_NAME: props.tokenUsageTable.tableName,
 				TOKEN_RECONCILIATION_QUEUE_URL: props.tokenReconciliationQueue.queueUrl,
 				RUST_LOG: 'info',
@@ -409,6 +412,15 @@ export class EcsStack extends Stack {
 			description: 'AWS region containing the proxy service.',
 			value: this.region,
 		});
+
+		if (props.outputIntegrationConfig) {
+			new CfnOutput(this, 'RateLimitRequestsPerWindow', {
+				value: String(rateLimitRequestsPerWindow),
+			});
+			new CfnOutput(this, 'RateLimitWindowSeconds', {
+				value: String(rateLimitWindowSeconds),
+			});
+		}
 	}
 
 	private addObservability(): void {
