@@ -1,0 +1,30 @@
+tests/integration/src/token_windows.rs
+  s_c26b496cd2589a::t_31a12865a976a2 1-49
+tests/integration/tests/token_limit.rs
+  s_c26b496cd2589a::t_31a12865a976a2 6-8
+tests/integration/src/lib.rs
+  s_c26b496cd2589a::t_31a12865a976a2 9
+tests/integration/src/anthropic_messages.rs
+  s_c26b496cd2589a::t_ab3424eedc0cc7 42-51,62-68
+tests/integration/tests/token_reservation.rs
+  s_c26b496cd2589a::t_e9447435b27d25 34,158
+  s_c26b496cd2589a::t_31a12865a976a2 2,9-11
+  s_c26b496cd2589a::t_a22a31f30e5ad3 72,81
+  s_c26b496cd2589a::t_ab3424eedc0cc7 1,3-8,12-33,35-71,73-80,82-157,159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "be47306ba7ef6cea524bb465adec2ff71a4a66eb",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
