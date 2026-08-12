@@ -1,20 +1,16 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use aws_sdk_dynamodb::types::AttributeValue;
 use integration_tests::anthropic_messages::AnthropicMessagesEnvironment;
 use integration_tests::fixtures::engineer::{
     EngineerFixtureOptions, FixtureError, with_engineer_fixture,
 };
+use integration_tests::token_windows::{
+    daily_usage_window, stable_usage_window_time, weekly_usage_window,
+};
 use reqwest::{Response, StatusCode};
 use serde_json::{Value, json};
-use tokio::time::sleep;
 
-const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const EXPECTED_TOTAL_TOKENS: u64 = 18;
-const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
-const TOKEN_WINDOW_SAFETY_MARGIN: Duration = Duration::from_secs(120);
 const TOKEN_LIMIT: u64 = 10_000;
-const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 
 #[tokio::test]
 async fn allows_engineer_without_token_limits() -> Result<(), FixtureError> {
@@ -231,45 +227,6 @@ fn token_limits(
         weekly_token_limit,
         ..EngineerFixtureOptions::default()
     }
-}
-
-fn now() -> Result<u64, FixtureError> {
-    Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
-}
-
-async fn stable_usage_window_time() -> Result<u64, FixtureError> {
-    loop {
-        let current_time = now()?;
-        let daily_remaining = seconds_until_window_rollover(current_time, DAILY_WINDOW_SECONDS);
-        let weekly_remaining = seconds_until_window_rollover(
-            current_time.saturating_add(MONDAY_WEEK_OFFSET_SECONDS),
-            WEEKLY_WINDOW_SECONDS,
-        );
-        let wait_seconds = [daily_remaining, weekly_remaining]
-            .into_iter()
-            .filter(|remaining| *remaining <= TOKEN_WINDOW_SAFETY_MARGIN.as_secs())
-            .max();
-
-        match wait_seconds {
-            Some(remaining) => sleep(Duration::from_secs(remaining + 1)).await,
-            None => return Ok(current_time),
-        }
-    }
-}
-
-fn seconds_until_window_rollover(epoch_seconds: u64, window_seconds: u64) -> u64 {
-    window_seconds - (epoch_seconds % window_seconds)
-}
-
-fn daily_usage_window(epoch_seconds: u64) -> String {
-    format!("daily#{}", epoch_seconds / DAILY_WINDOW_SECONDS)
-}
-
-fn weekly_usage_window(epoch_seconds: u64) -> String {
-    format!(
-        "weekly#{}",
-        epoch_seconds.saturating_add(MONDAY_WEEK_OFFSET_SECONDS) / WEEKLY_WINDOW_SECONDS
-    )
 }
 
 fn assert_number(attribute: Option<&AttributeValue>, expected: u64) {

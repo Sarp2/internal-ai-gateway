@@ -39,7 +39,16 @@ impl AnthropicMessagesEnvironment {
     }
 
     pub async fn send_messages(&self, api_key: &str) -> Result<Response, FixtureError> {
-        Ok(self
+        self.send_messages_with_options(api_key, false, &[]).await
+    }
+
+    pub async fn send_messages_with_options(
+        &self,
+        api_key: &str,
+        stream: bool,
+        headers: &[(&str, &str)],
+    ) -> Result<Response, FixtureError> {
+        let mut request = self
             .client
             .post(self.messages_url.clone())
             .header("x-api-key", api_key)
@@ -50,9 +59,12 @@ impl AnthropicMessagesEnvironment {
                     "role": "user"
                 }],
                 "model": "claude-integration-test",
-                "stream": false
-            }))
-            .send()
-            .await?)
+                "stream": stream
+            }));
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+
+        Ok(request.send().await?)
     }
 }
