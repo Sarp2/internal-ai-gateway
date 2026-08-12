@@ -9,11 +9,13 @@ use integration_tests::fixtures::engineer::{
 };
 use reqwest::{Client, Response, StatusCode};
 use serde_json::{Value, json};
+use tokio::time::sleep;
 use url::Url;
 
 const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const EXPECTED_TOTAL_TOKENS: u64 = 18;
 const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
+const TOKEN_WINDOW_SAFETY_MARGIN: Duration = Duration::from_secs(35);
 const TOKEN_LIMIT: u64 = 10_000;
 const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 
@@ -63,8 +65,13 @@ async fn rejects_engineer_with_exhausted_daily_quota() -> Result<(), FixtureErro
         &environment.sdk_config,
         token_limits(Some(TOKEN_LIMIT), None),
         |engineer| async move {
+            let request_time = stable_usage_window_time().await?;
             test_environment
-                .seed_usage(engineer.user_id(), daily_usage_window(now()?), TOKEN_LIMIT)
+                .seed_usage(
+                    engineer.user_id(),
+                    daily_usage_window(request_time),
+                    TOKEN_LIMIT,
+                )
                 .await?;
 
             let response = test_environment.send_messages(engineer.api_key()).await?;
@@ -84,8 +91,13 @@ async fn rejects_engineer_with_exhausted_weekly_quota() -> Result<(), FixtureErr
         &environment.sdk_config,
         token_limits(None, Some(TOKEN_LIMIT)),
         |engineer| async move {
+            let request_time = stable_usage_window_time().await?;
             test_environment
-                .seed_usage(engineer.user_id(), weekly_usage_window(now()?), TOKEN_LIMIT)
+                .seed_usage(
+                    engineer.user_id(),
+                    weekly_usage_window(request_time),
+                    TOKEN_LIMIT,
+                )
                 .await?;
 
             let response = test_environment.send_messages(engineer.api_key()).await?;
@@ -110,10 +122,11 @@ async fn keeps_token_limits_independent_between_engineers() -> Result<(), Fixtur
                 &test_environment.sdk_config,
                 EngineerFixtureOptions::default(),
                 |other_engineer| async move {
+                    let request_time = stable_usage_window_time().await?;
                     test_environment
                         .seed_usage(
                             limited_engineer.user_id(),
-                            daily_usage_window(now()?),
+                            daily_usage_window(request_time),
                             TOKEN_LIMIT,
                         )
                         .await?;
@@ -146,7 +159,7 @@ async fn records_exact_usage_in_daily_and_weekly_windows() -> Result<(), Fixture
         &environment.sdk_config,
         token_limits(Some(TOKEN_LIMIT), Some(TOKEN_LIMIT)),
         |engineer| async move {
-            let request_time = now()?;
+            let request_time = stable_usage_window_time().await?;
             let response = test_environment.send_messages(engineer.api_key()).await?;
             assert_eq!(response.status(), StatusCode::OK);
 
@@ -272,6 +285,30 @@ fn token_limits(
 
 fn now() -> Result<u64, FixtureError> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
+}
+
+async fn stable_usage_window_time() -> Result<u64, FixtureError> {
+    loop {
+        let current_time = now()?;
+        let daily_remaining = seconds_until_window_rollover(current_time, DAILY_WINDOW_SECONDS);
+        let weekly_remaining = seconds_until_window_rollover(
+            current_time.saturating_add(MONDAY_WEEK_OFFSET_SECONDS),
+            WEEKLY_WINDOW_SECONDS,
+        );
+        let wait_seconds = [daily_remaining, weekly_remaining]
+            .into_iter()
+            .filter(|remaining| *remaining <= TOKEN_WINDOW_SAFETY_MARGIN.as_secs())
+            .max();
+
+        match wait_seconds {
+            Some(remaining) => sleep(Duration::from_secs(remaining + 1)).await,
+            None => return Ok(current_time),
+        }
+    }
+}
+
+fn seconds_until_window_rollover(epoch_seconds: u64, window_seconds: u64) -> u64 {
+    window_seconds - (epoch_seconds % window_seconds)
 }
 
 fn daily_usage_window(epoch_seconds: u64) -> String {
