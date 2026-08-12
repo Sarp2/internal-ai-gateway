@@ -12,7 +12,7 @@ use tokio::time::sleep;
 const DAILY_WINDOW_SECONDS: u64 = 86_400;
 const EXPECTED_TOTAL_TOKENS: u64 = 18;
 const MONDAY_WEEK_OFFSET_SECONDS: u64 = DAILY_WINDOW_SECONDS * 3;
-const TOKEN_WINDOW_SAFETY_MARGIN: Duration = Duration::from_secs(35);
+const TOKEN_WINDOW_SAFETY_MARGIN: Duration = Duration::from_secs(120);
 const TOKEN_LIMIT: u64 = 10_000;
 const WEEKLY_WINDOW_SECONDS: u64 = DAILY_WINDOW_SECONDS * 7;
 
