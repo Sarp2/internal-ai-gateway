@@ -1,0 +1,20 @@
+tests/integration/tests/token_limit.rs
+  s_c26b496cd2589a::t_ada784502b8a7c 12,18,68,70-74,94,96-100,125,129,162,290-312
+  s_c26b496cd2589a::t_4cee4ed990c274 313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "cc96b7f4de26576bf10b4b4bb3c840d31861122b",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
