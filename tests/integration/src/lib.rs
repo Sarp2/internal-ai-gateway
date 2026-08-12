@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use url::Url;
 
+pub mod anthropic_messages;
 pub mod fixtures;
 
 #[cfg(test)]
