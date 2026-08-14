@@ -1,0 +1,27 @@
+tests/integration/src/token_test_values.rs
+  s_c26b496cd2589a::t_404008b0033010 1-2
+tests/integration/tests/token_reservation.rs
+  s_c26b496cd2589a::t_404008b0033010 28-29,52,63,72-73,77,83-84,89
+  s_c26b496cd2589a::t_8884e539f345d3 9
+tests/integration/tests/token_limit.rs
+  s_c26b496cd2589a::t_8884e539f345d3 6
+  s_c26b496cd2589a::t_404008b0033010 39,57,64,83,90,109,121,151,161,168
+tests/integration/src/lib.rs
+  s_c26b496cd2589a::t_404008b0033010 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "02e39836cbc7fd8c92ababeab9b60757f71d7ef2",
+  "prompts": {},
+  "sessions": {
+    "s_c26b496cd2589a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f02af-3446-7942-a214-2c4658616966",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
