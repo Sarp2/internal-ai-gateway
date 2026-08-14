@@ -3,14 +3,12 @@ use integration_tests::anthropic_messages::AnthropicMessagesEnvironment;
 use integration_tests::fixtures::engineer::{
     EngineerFixtureOptions, FixtureError, with_engineer_fixture,
 };
+use integration_tests::token_test_values::{ANTHROPIC_MOCK_TOTAL_TOKENS, STANDARD_TOKEN_LIMIT};
 use integration_tests::token_windows::{
     daily_usage_window, stable_usage_window_time, weekly_usage_window,
 };
 use reqwest::{Response, StatusCode};
 use serde_json::{Value, json};
-
-const EXPECTED_TOTAL_TOKENS: u64 = 18;
-const TOKEN_LIMIT: u64 = 10_000;
 
 #[tokio::test]
 async fn allows_engineer_without_token_limits() -> Result<(), FixtureError> {
@@ -38,7 +36,7 @@ async fn allows_request_with_available_daily_and_weekly_quota() -> Result<(), Fi
     with_engineer_fixture(
         &environment.config,
         &environment.sdk_config,
-        token_limits(Some(TOKEN_LIMIT), Some(TOKEN_LIMIT)),
+        token_limits(Some(STANDARD_TOKEN_LIMIT), Some(STANDARD_TOKEN_LIMIT)),
         |engineer| async move {
             let response = test_environment.send_messages(engineer.api_key()).await?;
             assert_eq!(response.status(), StatusCode::OK);
@@ -56,14 +54,14 @@ async fn rejects_engineer_with_exhausted_daily_quota() -> Result<(), FixtureErro
     with_engineer_fixture(
         &environment.config,
         &environment.sdk_config,
-        token_limits(Some(TOKEN_LIMIT), None),
+        token_limits(Some(STANDARD_TOKEN_LIMIT), None),
         |engineer| async move {
             let request_time = stable_usage_window_time().await?;
             seed_usage(
                 test_environment,
                 engineer.user_id(),
                 daily_usage_window(request_time),
-                TOKEN_LIMIT,
+                STANDARD_TOKEN_LIMIT,
             )
             .await?;
 
@@ -82,14 +80,14 @@ async fn rejects_engineer_with_exhausted_weekly_quota() -> Result<(), FixtureErr
     with_engineer_fixture(
         &environment.config,
         &environment.sdk_config,
-        token_limits(None, Some(TOKEN_LIMIT)),
+        token_limits(None, Some(STANDARD_TOKEN_LIMIT)),
         |engineer| async move {
             let request_time = stable_usage_window_time().await?;
             seed_usage(
                 test_environment,
                 engineer.user_id(),
                 weekly_usage_window(request_time),
-                TOKEN_LIMIT,
+                STANDARD_TOKEN_LIMIT,
             )
             .await?;
 
@@ -108,7 +106,7 @@ async fn keeps_token_limits_independent_between_engineers() -> Result<(), Fixtur
     with_engineer_fixture(
         &environment.config,
         &environment.sdk_config,
-        token_limits(Some(TOKEN_LIMIT), None),
+        token_limits(Some(STANDARD_TOKEN_LIMIT), None),
         |limited_engineer| async move {
             with_engineer_fixture(
                 &test_environment.config,
@@ -120,7 +118,7 @@ async fn keeps_token_limits_independent_between_engineers() -> Result<(), Fixtur
                         test_environment,
                         limited_engineer.user_id(),
                         daily_usage_window(request_time),
-                        TOKEN_LIMIT,
+                        STANDARD_TOKEN_LIMIT,
                     )
                     .await?;
 
@@ -150,7 +148,7 @@ async fn records_exact_usage_in_daily_and_weekly_windows() -> Result<(), Fixture
     with_engineer_fixture(
         &environment.config,
         &environment.sdk_config,
-        token_limits(Some(TOKEN_LIMIT), Some(TOKEN_LIMIT)),
+        token_limits(Some(STANDARD_TOKEN_LIMIT), Some(STANDARD_TOKEN_LIMIT)),
         |engineer| async move {
             let request_time = stable_usage_window_time().await?;
             let response = test_environment.send_messages(engineer.api_key()).await?;
@@ -160,14 +158,14 @@ async fn records_exact_usage_in_daily_and_weekly_windows() -> Result<(), Fixture
                 test_environment,
                 engineer.user_id(),
                 &daily_usage_window(request_time),
-                EXPECTED_TOTAL_TOKENS,
+                ANTHROPIC_MOCK_TOTAL_TOKENS,
             )
             .await?;
             assert_usage(
                 test_environment,
                 engineer.user_id(),
                 &weekly_usage_window(request_time),
-                EXPECTED_TOTAL_TOKENS,
+                ANTHROPIC_MOCK_TOTAL_TOKENS,
             )
             .await
         },

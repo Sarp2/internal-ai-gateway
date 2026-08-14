@@ -6,16 +6,15 @@ use integration_tests::anthropic_messages::AnthropicMessagesEnvironment;
 use integration_tests::fixtures::engineer::{
     EngineerFixtureOptions, FixtureError, with_engineer_fixture,
 };
+use integration_tests::token_test_values::{ANTHROPIC_MOCK_TOTAL_TOKENS, STANDARD_TOKEN_LIMIT};
 use integration_tests::token_windows::{
     daily_usage_window, stable_usage_window_time, weekly_usage_window,
 };
 use reqwest::StatusCode;
 use tokio::time::{sleep, timeout};
 
-const EXPECTED_TOTAL_TOKENS: u64 = 18;
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const POLL_TIMEOUT: Duration = Duration::from_secs(30);
-const TOKEN_LIMIT: u64 = 10_000;
 
 #[tokio::test]
 async fn reserves_budget_then_reconciles_exact_usage() -> Result<(), FixtureError> {
@@ -26,8 +25,8 @@ async fn reserves_budget_then_reconciles_exact_usage() -> Result<(), FixtureErro
         &environment.config,
         &environment.sdk_config,
         EngineerFixtureOptions {
-            daily_token_limit: Some(TOKEN_LIMIT),
-            weekly_token_limit: Some(TOKEN_LIMIT),
+            daily_token_limit: Some(STANDARD_TOKEN_LIMIT),
+            weekly_token_limit: Some(STANDARD_TOKEN_LIMIT),
             ..EngineerFixtureOptions::default()
         },
         |engineer| async move {
@@ -50,6 +49,7 @@ async fn reserves_budget_then_reconciles_exact_usage() -> Result<(), FixtureErro
                 |usage| usage.reserved_tokens > 0 && usage.consumed_tokens == 0,
             )
             .await?;
+
             let reserved_weekly = wait_for_usage(
                 test_environment,
                 engineer.user_id(),
@@ -60,7 +60,7 @@ async fn reserves_budget_then_reconciles_exact_usage() -> Result<(), FixtureErro
 
             assert_eq!(reserved_daily.token_count, reserved_daily.reserved_tokens);
             assert_eq!(reserved_weekly, reserved_daily);
-            assert!(reserved_daily.reserved_tokens > EXPECTED_TOTAL_TOKENS);
+            assert!(reserved_daily.reserved_tokens > ANTHROPIC_MOCK_TOTAL_TOKENS);
 
             response.bytes().await?;
 
@@ -69,21 +69,24 @@ async fn reserves_budget_then_reconciles_exact_usage() -> Result<(), FixtureErro
                 engineer.user_id(),
                 &daily_window,
                 |usage| {
-                    usage.reserved_tokens == 0 && usage.consumed_tokens == EXPECTED_TOTAL_TOKENS
+                    usage.reserved_tokens == 0
+                        && usage.consumed_tokens == ANTHROPIC_MOCK_TOTAL_TOKENS
                 },
             )
             .await?;
+
             let completed_weekly = wait_for_usage(
                 test_environment,
                 engineer.user_id(),
                 &weekly_window,
                 |usage| {
-                    usage.reserved_tokens == 0 && usage.consumed_tokens == EXPECTED_TOTAL_TOKENS
+                    usage.reserved_tokens == 0
+                        && usage.consumed_tokens == ANTHROPIC_MOCK_TOTAL_TOKENS
                 },
             )
             .await?;
 
-            assert_eq!(completed_daily.token_count, EXPECTED_TOTAL_TOKENS);
+            assert_eq!(completed_daily.token_count, ANTHROPIC_MOCK_TOTAL_TOKENS);
             assert_eq!(completed_weekly, completed_daily);
             Ok(())
         },
