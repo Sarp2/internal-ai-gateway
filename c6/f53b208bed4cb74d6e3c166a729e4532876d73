@@ -1,0 +1,19 @@
+README.md
+  s_7ab8606821609c::t_784622838e956d 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6f53b208bed4cb74d6e3c166a729e4532876d73",
+  "prompts": {},
+  "sessions": {
+    "s_7ab8606821609c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "469d029f-b26a-4180-8729-dfe2ac7f2511",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
