@@ -1,0 +1,20 @@
+README.md
+  s_06f41787a17a1e::t_57eeb66df37aa5 1
+  s_06f41787a17a1e::t_50c39422767595 53-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c1890b5cd2e9ac8522321bdd18f05f7c2efdeef7",
+  "prompts": {},
+  "sessions": {
+    "s_06f41787a17a1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a185ff-7c3a-7ec1-8fed-5d51ded26378",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
