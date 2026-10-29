@@ -1,0 +1,19 @@
+a.md
+  s_810d0bfd030cb5::t_74a3bdeefeea2c 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c0894bb12f31394c6ebd48dccdeec69bf6af2d1a",
+  "prompts": {},
+  "sessions": {
+    "s_810d0bfd030cb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1dca4279-91bb-49aa-93d1-61c19c3398be",
+        "model": "unknown"
+      },
+      "human_author": "Sarp <sarppehlivan444@gmail.com>"
+    }
+  }
+}
